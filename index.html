@@ -44,50 +44,51 @@
                 return w.toString().includes('kg') ? num : num / 1000;
             };
 
-            const fetchCSV = () => {
-                Papa.parse(CSV_URL, {
-                    download: true,
-                    header: true,
-                    skipEmptyLines: true,
-                    complete: (results) => {
-                        const newItems = [];
-                        let lastCategory = '';
-                        let lastItemName = '';
+          const fetchCSV = () => {
+    Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            console.log("원본 데이터:", results.data); // 데이터가 오는지 확인용
+            const newItems = [];
+            let lastCategory = ''; // 직전 카테고리 기억
+            let lastItemName = ''; // 직전 품목명 기억
 
-                        results.data.forEach((row, idx) => {
-                            const rawCategory = row['구분']?.trim();
-                            const rawName = row['품목']?.trim();
-                            const rawWeight = row['개당 무게']?.trim();
-                            const rawQty = row['수량']?.trim();
+            results.data.forEach((row, idx) => {
+                let name = row['품목']?.trim();
+                let category = row['구분']?.trim();
+                const weightStr = row['개당 무게']?.trim();
+                const qtyStr = row['수량']?.trim();
+                
+                const weight = parseWeight(weightStr);
+                const qty = parseInt(qtyStr) || 1;
 
-                            // 1. 카테고리 병합셀 추적
-                            if (rawCategory) lastCategory = rawCategory;
-                            const category = lastCategory;
+                // 병합셀 처리: '구분'이 비어있으면 위 칸의 값을 가져옴
+                if (!category && name) { category = lastCategory; } 
+                else if (category) { lastCategory = category; }
 
-                            // 2. 품목명 병합셀 추적
-                            if (rawName) lastItemName = rawName;
-                            const name = lastItemName;
+                // 병합셀 처리: '품목'이 비어있으면 위 칸의 값을 가져옴
+                if (!name && (qtyStr || weightStr)) { name = lastItemName; } 
+                else if (name) { lastItemName = name; }
 
-                            const weight = parseWeight(rawWeight);
-                            const qty = parseInt(rawQty) || 0;
-
-                            // 유효한 데이터 세트인 경우에만 추가
-                            if (name && category && (rawWeight || rawQty)) {
-                                for (let i = 0; i < qty; i++) {
-                                    newItems.push({
-                                        id: `item-${idx}-${i}`,
-                                        name: qty > 1 ? `${name} (${i + 1})` : name,
-                                        weight: weight,
-                                        category: category,
-                                        owner: '미배정'
-                                    });
-                                }
-                            }
+                if (name && category) {
+                    for (let i = 0; i < qty; i++) {
+                        newItems.push({
+                            id: `item-${idx}-${i}`,
+                            name: qty > 1 ? `${name} (${i + 1})` : name,
+                            weight: weight,
+                            category: category,
+                            owner: '미배정'
                         });
-                        setItems(newItems);
                     }
-                });
-            };
+                }
+            });
+            console.log("가공된 데이터 개수:", newItems.length);
+            setItems(newItems);
+        }
+    });
+};
 
             const handleItemClick = (id) => {
                 setItems(prev => prev.map(item => {
@@ -171,3 +172,4 @@
     </script>
 </body>
 </html>
+
