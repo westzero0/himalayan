@@ -21,7 +21,7 @@
         const { useState, useEffect, useMemo } = React;
 
         // 📍 여기에 구글 시트 CSV 주소를 넣으세요
-        const CSV_URL = 'https://docs.google.com/spreadsheets/d/1uDshkv41LSU6sgCPCObH0KxefUk0VDc9/export?format=csv&gid=1145388945';
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?output=csv';
 
         const App = () => {
             const [items, setItems] = useState([]);
@@ -46,63 +46,48 @@
             };
 
        const fetchCSV = () => {
-                console.log("데이터를 불러오는 중..."); // 디버깅용
-                Papa.parse(CSV_URL, {
-                    download: true,
-                    header: true,
-                    skipEmptyLines: true, // 빈 줄 무시
-                    complete: (results) => {
-                        console.log("원본 데이터:", results.data); // 시트에서 가져온 생데이터 확인
-                        
-                        const newItems = [];
-                        let lastCategory = '';
-                        let lastItemName = '';
+    console.log("데이터 요청 중...");
+    Papa.parse(CSV_URL, {
+        download: true,
+        header: true,
+        skipEmptyLines: true,
+        complete: (results) => {
+            console.log("원본 데이터:", results.data); // 데이터가 오는지 여기서 확인
+            const newItems = [];
+            let lastCategory = '';
+            let lastItemName = '';
 
-                        results.data.forEach((row, idx) => {
-                            // 헤더 이름의 앞뒤 공백 제거 (trim)
-                            let name = row['품목']?.trim();
-                            let category = row['구분']?.trim();
-                            const weightStr = row['개당 무게']?.trim();
-                            const qtyStr = row['수량']?.trim();
+            results.data.forEach((row, idx) => {
+                let name = row['품목']?.trim();
+                let category = row['구분']?.trim();
+                const weight = parseWeight(row['개당 무게']);
+                const qty = parseInt(row['수량']) || 0;
 
-                            const weight = parseWeight(weightStr);
-                            const qty = parseInt(qtyStr) || 1;
+                // 병합된 '구분' 셀 처리
+                if (!category && name) { category = lastCategory; } 
+                else if (category) { lastCategory = category; }
 
-                            // 병합셀 처리
-                            if (!category && name) {
-                                category = lastCategory;
-                            } else if (category) {
-                                lastCategory = category;
-                            }
+                // 병합된 '품목' 셀 처리
+                if (!name && (row['개당 무게'] || row['수량'])) { name = lastItemName; } 
+                else if (name) { lastItemName = name; }
 
-                            if (!name && (qtyStr || weightStr)) {
-                                name = lastItemName;
-                            } else if (name) {
-                                lastItemName = name;
-                            }
-
-                            if (name && category) {
-                                for (let i = 0; i < qty; i++) {
-                                    newItems.push({
-                                        id: `item-${idx}-${i}`,
-                                        name: qty > 1 ? `${name} (${i + 1})` : name,
-                                        weight: weight,
-                                        category: category,
-                                        owner: '미배정'
-                                    });
-                                }
-                            }
+                if (name && category && qty > 0) {
+                    for (let i = 0; i < qty; i++) {
+                        newItems.push({
+                            id: `item-${idx}-${i}`,
+                            name: qty > 1 ? `${name} (${i + 1})` : name,
+                            weight: weight,
+                            category: category,
+                            owner: '미배정'
                         });
-                        
-                        console.log("가공된 데이터 개수:", newItems.length); // 실제 칩으로 만들어진 개수
-                        setItems(newItems);
-                    },
-                    error: (err) => {
-                        console.error("데이터 로드 실패:", err);
                     }
-                });
-            };
-
+                }
+            });
+            console.log("처리된 아이템 개수:", newItems.length);
+            setItems(newItems);
+        }
+    });
+};
             const handleItemClick = (id) => {
                 setItems(prev => prev.map(item => {
                     if (item.id !== id) return item;
@@ -178,6 +163,7 @@
     </script>
 </body>
 </html>
+
 
 
 
