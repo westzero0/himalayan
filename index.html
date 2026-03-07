@@ -45,36 +45,42 @@
                 return w.toString().includes('kg') ? num : num / 1000;
             };
 
-         const fetchCSV = () => {
+       const fetchCSV = () => {
+                console.log("데이터를 불러오는 중..."); // 디버깅용
                 Papa.parse(CSV_URL, {
                     download: true,
                     header: true,
+                    skipEmptyLines: true, // 빈 줄 무시
                     complete: (results) => {
+                        console.log("원본 데이터:", results.data); // 시트에서 가져온 생데이터 확인
+                        
                         const newItems = [];
-                        let lastCategory = ''; // 직전 카테고리 기억
-                        let lastItemName = ''; // 직전 품목명 기억
+                        let lastCategory = '';
+                        let lastItemName = '';
 
                         results.data.forEach((row, idx) => {
-                            let name = row['품목'];
-                            let category = row['구분'];
-                            const weight = parseWeight(row['개당 무게']);
-                            const qty = parseInt(row['수량']) || 1;
+                            // 헤더 이름의 앞뒤 공백 제거 (trim)
+                            let name = row['품목']?.trim();
+                            let category = row['구분']?.trim();
+                            const weightStr = row['개당 무게']?.trim();
+                            const qtyStr = row['수량']?.trim();
 
-                            // 1. 카테고리 병합셀 처리
+                            const weight = parseWeight(weightStr);
+                            const qty = parseInt(qtyStr) || 1;
+
+                            // 병합셀 처리
                             if (!category && name) {
                                 category = lastCategory;
                             } else if (category) {
                                 lastCategory = category;
                             }
 
-                            // 2. 품목명 병합셀 처리 (핵심 추가!)
-                            if (!name && (row['수량'] || row['개당 무게'])) {
+                            if (!name && (qtyStr || weightStr)) {
                                 name = lastItemName;
                             } else if (name) {
                                 lastItemName = name;
                             }
 
-                            // 품목명과 카테고리가 모두 확보된 경우에만 추가
                             if (name && category) {
                                 for (let i = 0; i < qty; i++) {
                                     newItems.push({
@@ -87,7 +93,12 @@
                                 }
                             }
                         });
+                        
+                        console.log("가공된 데이터 개수:", newItems.length); // 실제 칩으로 만들어진 개수
                         setItems(newItems);
+                    },
+                    error: (err) => {
+                        console.error("데이터 로드 실패:", err);
                     }
                 });
             };
@@ -167,6 +178,7 @@
     </script>
 </body>
 </html>
+
 
 
 
