@@ -16,71 +16,78 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-   <script type="text/babel">
+    <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 📍 1. 구글 시트 주소 끝에 &gid=숫자 를 반드시 확인해서 넣어주세요!
+        // 📍 1. 시트 주소 확인
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?output=csv';
 
         const App = () => {
-            // ... (중간 생략: 상태 설정 및 useEffect는 이전과 동일) ...
+            const [items, setItems] = useState([]);
+            const [activeMember, setActiveMember] = useState(null);
+            const [searchQuery, setSearchQuery] = useState('');
+            const [selectedCategory, setSelectedCategory] = useState('전체');
 
-          const fetchCSV = () => {
-    console.log("🚀 시트 데이터 읽기 시작...");
-    Papa.parse(CSV_URL, {
-        download: true,
-        header: false, // 인덱스(0, 1, 2)로 접근하기 위해 false
-        skipEmptyLines: true,
-        complete: (results) => {
-            console.log("Raw Data (전체):", results.data);
+            useEffect(() => {
+                const saved = localStorage.getItem('satpeak_v4');
+                if (saved) { setItems(JSON.parse(saved)); } 
+                else { fetchCSV(); }
+            }, []);
 
-            // 📍 핵심 수정: '품목'이나 '구분'이라는 글자가 들어있는 헤더 행을 자동으로 걸러냅니다.
-            // 그리고 C열(row[2])에 품목 이름이 있는 줄만 가져옵니다.
-            const validRows = results.data.filter(row => 
-                row[2] && 
-                row[2] !== '품목' && 
-                row[2] !== '품목명' && 
-                row[2].trim() !== ""
-            );
+            useEffect(() => {
+                if (items.length > 0) localStorage.setItem('satpeak_v4', JSON.stringify(items));
+            }, [items]);
 
-            console.log("분석 대상 행 개수:", validRows.length);
-            
-            const newItems = [];
-            let lastCategory = '';
-            let lastItemName = '';
+            const parseWeight = (w) => {
+                if (!w) return 0;
+                const num = parseFloat(w.toString().replace(/[^0-9.]/g, ''));
+                return w.toString().includes('kg') ? num : num / 1000;
+            };
 
-            validRows.forEach((row, idx) => {
-                // 시트 구조: B(1)=구분, C(2)=품목, D(3)=수량, G(6)=무게
-                let category = row[1]?.trim(); 
-                let name = row[2]?.trim();     
-                const qtyStr = row[3]?.trim();  
-                const weightStr = row[6]?.trim(); 
+            const fetchCSV = () => {
+                Papa.parse(CSV_URL, {
+                    download: true,
+                    header: false,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        // B, C, D, G열을 사용하는 사본 시트 구조
+                        const rows = results.data; 
+                        const newItems = [];
+                        let lastCategory = '';
+                        let lastItemName = '';
 
-                // 병합셀 자동 채우기 로직
-                if (category) { lastCategory = category; } else { category = lastCategory; }
-                if (name) { lastItemName = name; } else { name = lastItemName; }
+                        rows.forEach((row, idx) => {
+                            // 제목줄(헤더) 제외 로직
+                            if (row[2] === '품목' || row[1] === '구분') return;
 
-                const weight = parseWeight(weightStr);
-                const qty = parseInt(qtyStr) || 0;
+                            let category = row[1]?.trim(); // B열
+                            let name = row[2]?.trim();     // C열
+                            const qtyStr = row[3]?.trim();  // D열
+                            const weightStr = row[6]?.trim(); // G열
 
-                if (name && qty > 0) {
-                    for (let i = 0; i < qty; i++) {
-                        newItems.push({
-                            id: `item-${idx}-${i}`,
-                            name: qty > 1 ? `${name} (${i + 1})` : name,
-                            weight: weight,
-                            category: category || '기타',
-                            owner: '미배정'
+                            // 병합셀 자동 채우기
+                            if (category) lastCategory = category; else category = lastCategory;
+                            if (name) lastItemName = name; else name = lastItemName;
+
+                            const weight = parseWeight(weightStr);
+                            const qty = parseInt(qtyStr) || 0;
+
+                            if (name && qty > 0) {
+                                for (let i = 0; i < qty; i++) {
+                                    newItems.push({
+                                        id: `item-${idx}-${i}`,
+                                        name: qty > 1 ? `${name} (${i + 1})` : name,
+                                        weight: weight,
+                                        category: category || '기타',
+                                        owner: '미배정'
+                                    });
+                                }
+                            }
                         });
+                        setItems(newItems);
                     }
-                }
-            });
-
-            console.log("✅ 가공 완료 아이템:", newItems.length, "개");
-            setItems(newItems);
-        }
-    });
-};
+                });
+            };
 
             const handleItemClick = (id) => {
                 setItems(prev => prev.map(item => {
@@ -92,7 +99,6 @@
             };
 
             const memberList = ['대장', '종민', '의준', '지호', '서영', '형욱', '상국']; 
-            // 📍 '식량' 카테고리 추가
             const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
             
             const filtered = items.filter(i => 
@@ -101,11 +107,11 @@
             );
 
             return (
-                <div className="max-w-6xl mx-auto p-4 pb-64 font-sans">
+                <div className="max-w-6xl mx-auto p-4 pb-64">
                     <header className="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm p-4 rounded-2xl mb-6 z-20 border border-slate-200">
                         <div className="flex justify-between items-center mb-4">
                             <h1 className="text-xl font-black text-slate-800 tracking-tight">🏔️ SAT PEAK 공동장비 배분</h1>
-                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_distribution_v3'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50">RESET</button>
+                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_v4'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50">RESET</button>
                         </div>
                         <input type="text" placeholder="장비 검색..." className="w-full p-3 bg-slate-50 border rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setSearchQuery(e.target.value)} />
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
@@ -164,6 +170,3 @@
     </script>
 </body>
 </html>
-
-
-
