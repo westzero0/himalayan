@@ -1,9 +1,10 @@
-<!DOCTYPE html>
+
+        <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>삿피크 원정대 수화물 배분</title>
+    <title>삿피크 원정대 공동장비 배분</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -14,47 +15,61 @@
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
     </style>
 </head>
-<body class="bg-gray-100">
+<body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 은설님의 구글 시트 CSV 내보내기 주소
-        const CSV_URL = 'https://docs.google.com/spreadsheets/d/1uDshkv41LSU6sgCPCObH0KxefUk0VDc9/export?format=csve';
+        // 📍 여기에 구글 시트 CSV 주소를 넣으세요
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/1uDshkv41LSU6sgCPCObH0KxefUk0VDc9/export?format=csv';
 
         const App = () => {
             const [items, setItems] = useState([]);
             const [activeMember, setActiveMember] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('전체');
-            const [isExceeded, setIsExceeded] = useState(null);
 
             useEffect(() => {
-                const saved = localStorage.getItem('himalayan_luggage');
+                const saved = localStorage.getItem('satpeak_distribution_v2');
                 if (saved) { setItems(JSON.parse(saved)); } 
                 else { fetchCSV(); }
             }, []);
 
             useEffect(() => {
-                if (items.length > 0) localStorage.setItem('himalayan_luggage', JSON.stringify(items));
+                if (items.length > 0) localStorage.setItem('satpeak_distribution_v2', JSON.stringify(items));
             }, [items]);
+
+            const parseWeight = (w) => {
+                if (!w) return 0;
+                const num = parseFloat(w.toString().replace(/[^0-9.]/g, ''));
+                return w.toString().includes('kg') ? num : num / 1000;
+            };
 
             const fetchCSV = () => {
                 Papa.parse(CSV_URL, {
                     download: true,
                     header: true,
                     complete: (results) => {
-                        const data = results.data
-                            .filter(row => row['품목명'])
-                            .map((row, idx) => ({
-                                id: `item-${idx}`,
-                                name: row['품목명'],
-                                weight: parseFloat(row['무게(kg)'] || 0),
-                                volume: parseInt(row['부피(1-10)'] || 0),
-                                category: row['분류'] || '기타',
-                                owner: row['배정자'] || '미배정'
-                            }));
-                        setItems(data);
+                        const newItems = [];
+                        results.data.forEach((row, idx) => {
+                            const name = row['품목'];
+                            const category = row['구분'];
+                            const weight = parseWeight(row['개당 무게']);
+                            const qty = parseInt(row['수량']) || 1;
+
+                            if (name && category) {
+                                for (let i = 0; i < qty; i++) {
+                                    newItems.push({
+                                        id: `item-${idx}-${i}`,
+                                        name: qty > 1 ? `${name} (${i + 1})` : name,
+                                        weight: weight,
+                                        category: category,
+                                        owner: '미배정'
+                                    });
+                                }
+                            }
+                        });
+                        setItems(newItems);
                     }
                 });
             };
@@ -63,62 +78,66 @@
                 setItems(prev => prev.map(item => {
                     if (item.id !== id) return item;
                     if (item.owner !== '미배정') return { ...item, owner: '미배정' };
-                    if (!activeMember) { alert('배낭 카드를 먼저 선택하세요!'); return item; }
-                    
-                    const memberItems = prev.filter(i => i.owner === activeMember);
-                    const w = memberItems.reduce((s, i) => s + i.weight, 0) + item.weight;
-                    const v = memberItems.reduce((s, i) => s + i.volume, 0) + item.volume;
-                    if (w > 23 || v > 100) { setIsExceeded(activeMember); setTimeout(() => setIsExceeded(null), 500); }
-                    
+                    if (!activeMember) { alert('배분할 대원의 카드를 먼저 선택해주세요!'); return item; }
                     return { ...item, owner: activeMember };
                 }));
             };
 
-            const members = useMemo(() => [...new Set(items.map(i => i.owner))].filter(n => n !== '미배정'), [items]);
-            const categories = useMemo(() => ['전체', ...new Set(items.map(i => i.category))], [items]);
+            // 📍 업데이트된 대원 명단
+            const memberList = ['대장', '종민', '의준', '지호', '서영', '형욱', '상국']; 
+            const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료'];
             const filtered = items.filter(i => i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
 
             return (
-                <div className="max-w-4xl mx-auto min-h-screen pb-48">
-                    <header className="sticky top-0 bg-white shadow-sm p-4 z-20">
-                        <div className="flex justify-between items-center mb-3">
-                            <h1 className="text-xl font-bold">🏔️ 삿피크 수화물 배분</h1>
-                            <button onClick={() => { if(confirm('리셋하시겠습니까?')) { localStorage.removeItem('himalayan_luggage'); fetchCSV(); } }} className="text-xs bg-red-50 text-red-600 px-2 py-1 rounded">초기화</button>
+                <div className="max-w-6xl mx-auto p-4 pb-64">
+                    <header className="sticky top-0 bg-white shadow-sm p-4 rounded-2xl mb-6 z-20 border border-slate-200">
+                        <div className="flex justify-between items-center mb-4">
+                            <h1 className="text-xl font-black text-slate-800 tracking-tight">🏔️ SAT PEAK 공동장비 배분</h1>
+                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_distribution_v2'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50 uppercase">Reset</button>
                         </div>
-                        <input type="text" placeholder="장비 검색..." className="w-full p-2 border rounded mb-3" onChange={e => setSearchQuery(e.target.value)} />
+                        <input type="text" placeholder="장비 검색..." className="w-full p-3 bg-slate-50 border-none rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 transition-all" onChange={e => setSearchQuery(e.target.value)} />
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                            {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-3 py-1 rounded-full text-xs whitespace-nowrap ${selectedCategory === c ? 'bg-blue-600 text-white' : 'bg-gray-100'}`}>{c}</button>)}
+                            {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === c ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{c}</button>)}
                         </div>
                     </header>
 
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {members.map(m => {
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                        {memberList.map(m => {
                             const mItems = items.filter(i => i.owner === m);
                             const tw = mItems.reduce((s, i) => s + i.weight, 0);
-                            const tv = mItems.reduce((s, i) => s + i.volume, 0);
+                            const active = activeMember === m;
                             return (
-                                <div key={m} onClick={() => setActiveMember(m)} className={`bg-white p-4 rounded-xl border-2 transition-all ${activeMember === m ? 'border-blue-500 shadow-lg' : 'border-transparent'} ${isExceeded === m ? 'bg-red-50 animate-pulse' : ''}`}>
-                                    <div className="flex justify-between font-bold mb-2"><span>{m}</span><span className="text-xs font-normal text-gray-400">{mItems.length}개</span></div>
-                                    <div className="space-y-2 mb-3">
-                                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${tw > 23 ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${(tw/23)*100}%`}} /></div>
-                                        <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden"><div className={`h-full ${tv > 100 ? 'bg-red-500' : 'bg-orange-400'}`} style={{width: `${(tv/100)*100}%`}} /></div>
+                                <div key={m} onClick={() => setActiveMember(m)} className={`bg-white p-5 rounded-2xl border-4 transition-all cursor-pointer relative ${active ? 'border-blue-500 shadow-xl -translate-y-1' : 'border-transparent shadow-sm'}`}>
+                                    {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">선택됨</div>}
+                                    <div className="flex justify-between items-end mb-4">
+                                        <span className="text-lg font-black">{m}</span>
+                                        <span className={`text-sm font-black ${tw > 23 ? 'text-red-500' : 'text-blue-600'}`}>{tw.toFixed(2)}kg</span>
+                                    </div>
+                                    <div className="h-1.5 bg-slate-100 rounded-full mb-4 overflow-hidden">
+                                        <div className={`h-full transition-all duration-500 ${tw > 23 ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${Math.min((tw/23)*100, 100)}%`}} />
                                     </div>
                                     <div className="flex flex-wrap gap-1">
-                                        {mItems.map(i => <span key={i.id} onClick={e => { e.stopPropagation(); handleItemClick(i.id); }} className={`text-[10px] px-2 py-0.5 rounded cursor-pointer ${filtered.find(f => f.id === i.id) ? 'bg-blue-100 text-blue-700' : 'bg-gray-50 text-gray-300'}`}>{i.name}</span>)}
+                                        {mItems.map(i => (
+                                            <span key={i.id} onClick={e => { e.stopPropagation(); handleItemClick(i.id); }} className={`text-[9px] px-1.5 py-0.5 rounded font-bold border ${filtered.some(f => f.id === i.id) ? 'bg-blue-50 text-blue-700 border-blue-100' : 'bg-slate-50 text-slate-300 border-slate-50'}`}>
+                                                {i.name}
+                                            </span>
+                                        ))}
                                     </div>
                                 </div>
                             );
                         })}
                     </div>
 
-                    <footer className="fixed bottom-0 left-0 right-0 bg-white border-t p-4 h-40 overflow-y-auto z-30">
-                        <p className="text-[10px] text-gray-400 mb-2 uppercase">미배정 풀</p>
-                        <div className="flex flex-wrap gap-2">
-                            {items.filter(i => i.owner === '미배정').map(i => (
-                                <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-2 py-1 rounded-full text-[11px] border ${filtered.find(f => f.id === i.id) ? 'bg-orange-500 text-white border-orange-500' : 'bg-white text-gray-300 border-gray-100 opacity-40'}`}>
-                                    {i.name} {i.weight}kg
-                                </button>
-                            ))}
+                    <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t border-slate-200 p-6 h-60 overflow-y-auto z-30 shadow-[0_-10px_30px_rgba(0,0,0,0.05)]">
+                        <div className="max-w-6xl mx-auto">
+                            <p className="text-[10px] font-black text-slate-400 mb-3 tracking-[0.2em] uppercase">Unassigned Gear Pool</p>
+                            <div className="flex flex-wrap gap-2">
+                                {items.filter(i => i.owner === '미배정').map(i => (
+                                    <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${filtered.some(f => f.id === i.id) ? 'bg-amber-400 text-white border-amber-400 shadow-md scale-105' : 'bg-slate-100 text-slate-300 border-slate-100 opacity-40'}`}>
+                                        {i.name} <span className="opacity-60 font-medium ml-1">{i.weight.toFixed(2)}kg</span>
+                                    </button>
+                                ))}
+                            </div>
                         </div>
                     </footer>
                 </div>
@@ -130,4 +149,5 @@
     </script>
 </body>
 </html>
+
 
