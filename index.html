@@ -19,26 +19,26 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 📍 1. 시트 주소 확인
+        // 📍 1. 시트 주소 (gid=1147527820 확인됨)
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?gid=1147527820&single=true&output=csv';
 
-       const App = () => {
+        const App = () => {
             const [items, setItems] = useState([]);
             const [activeMember, setActiveMember] = useState(null);
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('전체');
 
             useEffect(() => {
-                const saved = localStorage.getItem('satpeak_v5');
+                // v6로 업데이트하여 깨끗하게 새로 시작합니다.
+                const saved = localStorage.getItem('satpeak_v6');
                 if (saved) { setItems(JSON.parse(saved)); } 
                 else { fetchCSV(); }
             }, []);
 
             useEffect(() => {
-                if (items.length > 0) localStorage.setItem('satpeak_v5', JSON.stringify(items));
+                if (items.length > 0) localStorage.setItem('satpeak_v6', JSON.stringify(items));
             }, [items]);
 
-            // 📍 2. 무게 변환 로직 강화 (에러 방어)
             const parseWeight = (w) => {
                 if (!w || w.toString().trim() === "") return 0;
                 const num = parseFloat(w.toString().replace(/[^0-9.]/g, ''));
@@ -52,38 +52,45 @@
                     header: false,
                     skipEmptyLines: true,
                     complete: (results) => {
+                        console.log("시트 로드 성공, 데이터 개수:", results.data.length);
                         const rows = results.data;
                         const newItems = [];
                         let lastCategory = '';
                         let lastItemName = '';
 
                         rows.forEach((row, idx) => {
-                            // 헤더나 빈 줄 건너뛰기
-                            if (row[2] === '품목' || !row[2]) return;
+                            // 제목줄 건너뛰기
+                            if (row[2] === '품목' || row[1] === '구분' || row[2] === '품목명') return;
 
-                            let category = row[1]?.trim(); 
-                            let name = row[2]?.trim();     
-                            const qtyStr = row[3]?.trim();  
-                            const weightStr = row[6]?.trim(); // G열(인덱스 6)
+                            // 📍 핵심: 병합 셀 데이터를 먼저 복원합니다.
+                            let currentCategory = row[1]?.trim();
+                            let currentName = row[2]?.trim();
+                            
+                            if (currentCategory) lastCategory = currentCategory;
+                            if (currentName) lastItemName = currentName;
 
-                            if (category) lastCategory = category; else category = lastCategory;
-                            if (name) lastItemName = name; else name = lastItemName;
+                            const category = lastCategory || '미분류';
+                            const name = lastItemName;
+                            const qtyStr = row[3]?.trim();
+                            const weightStr = row[6]?.trim(); // G열
 
                             const weight = parseWeight(weightStr);
                             const qty = parseInt(qtyStr) || 0;
 
-                            if (name && qty > 0) {
+                            // 품목명이 확보되었고 수량이나 무게가 있는 줄만 추가
+                            if (name && (qty > 0 || weight > 0)) {
                                 for (let i = 0; i < qty; i++) {
                                     newItems.push({
                                         id: `item-${idx}-${i}`,
                                         name: qty > 1 ? `${name} (${i + 1})` : name,
-                                        weight: weight || 0, // null 방지
-                                        category: category || '기타',
+                                        weight: weight || 0,
+                                        category: category,
                                         owner: '미배정'
                                     });
                                 }
                             }
                         });
+                        console.log("가공 완료 아이템:", newItems.length);
                         setItems(newItems);
                     }
                 });
@@ -91,41 +98,43 @@
 
             const handleItemClick = (id) => {
                 setItems(prev => prev.map(item => {
-                    if (item.id !== id) return item;
+                    if (!item || item.id !== id) return item;
                     if (item.owner !== '미배정') return { ...item, owner: '미배정' };
-                    if (!activeMember) { alert('대원 카드를 먼저 선택하세요!'); return item; }
+                    if (!activeMember) { alert('대원 카드를 먼저 클릭하세요!'); return item; }
                     return { ...item, owner: activeMember };
                 }));
             };
 
             const memberList = ['대장', '종민', '의준', '지호', '서영', '형욱', '상국']; 
             const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
-            const filtered = items.filter(i => i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
+            const filtered = items.filter(i => i && i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
 
             return (
                 <div className="max-w-6xl mx-auto p-4 pb-64 font-sans text-slate-900">
                     <header className="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm p-4 rounded-2xl mb-6 z-20 border border-slate-200">
                         <div className="flex justify-between items-center mb-4">
-                            <h1 className="text-xl font-black">🏔️ SAT PEAK 공동장비 배분</h1>
-                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_v5'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50">RESET</button>
+                            <h1 className="text-xl font-black italic text-blue-900">🏔️ SAT PEAK 2026</h1>
+                            <button onClick={() => { if(confirm('초기화할까요?')) { localStorage.removeItem('satpeak_v6'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50">RESET</button>
                         </div>
-                        <input type="text" placeholder="장비 검색..." className="w-full p-3 bg-slate-50 border rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setSearchQuery(e.target.value)} />
+                        <input type="text" placeholder="장비 검색 (예: 로프, 가스...)" className="w-full p-3 bg-slate-50 border rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setSearchQuery(e.target.value)} />
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
-                            {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap ${selectedCategory === c ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{c}</button>)}
+                            {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === c ? 'bg-blue-600 text-white shadow-md' : 'bg-slate-100 text-slate-500'}`}>{c}</button>)}
                         </div>
                     </header>
 
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                         {memberList.map(m => {
-                            const mItems = items.filter(i => i.owner === m);
+                            const mItems = items.filter(i => i && i.owner === m);
                             const tw = mItems.reduce((s, i) => s + (i.weight || 0), 0);
                             const active = activeMember === m;
                             return (
                                 <div key={m} onClick={() => setActiveMember(m)} className={`bg-white p-5 rounded-2xl border-4 transition-all cursor-pointer relative ${active ? 'border-blue-500 shadow-xl -translate-y-1' : 'border-transparent shadow-sm'}`}>
-                                    {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">선택됨</div>}
+                                    {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">ACTIVE</div>}
                                     <div className="flex justify-between items-end mb-4">
                                         <span className="text-lg font-black">{m}</span>
-                                        <span className={`text-sm font-black ${tw > 23 ? 'text-red-500' : 'text-blue-600'}`}>{(tw || 0).toFixed(2)}kg</span>
+                                        <span className={`text-sm font-black ${tw > 23 ? 'text-red-500' : 'text-blue-600'}`}>
+                                            {(tw || 0).toFixed(2)}kg
+                                        </span>
                                     </div>
                                     <div className="h-1.5 bg-slate-100 rounded-full mb-4 overflow-hidden">
                                         <div className={`h-full transition-all duration-500 ${tw > 23 ? 'bg-red-500' : 'bg-blue-500'}`} style={{width: `${Math.min((tw/23)*100, 100)}%`}} />
@@ -142,12 +151,12 @@
                         })}
                     </div>
 
-                    <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t p-6 h-60 overflow-y-auto z-30 shadow-lg">
+                    <footer className="fixed bottom-0 left-0 right-0 bg-white/80 backdrop-blur-xl border-t p-6 h-64 overflow-y-auto z-30 shadow-[0_-10px_40px_rgba(0,0,0,0.1)]">
                         <div className="max-w-6xl mx-auto">
-                            <p className="text-[10px] font-black text-slate-400 mb-3 tracking-widest uppercase">Unassigned Gear Pool</p>
+                            <p className="text-[10px] font-black text-slate-400 mb-3 tracking-widest uppercase">Unassigned Gear Pool ({items.filter(i => i && i.owner === '미배정').length})</p>
                             <div className="flex flex-wrap gap-2">
-                                {items.filter(i => i.owner === '미배정').map(i => (
-                                    <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${filtered.some(f => f.id === i.id) ? 'bg-amber-400 text-white border-amber-400 scale-105' : 'bg-slate-100 text-slate-300 border-slate-100 opacity-40'}`}>
+                                {items.filter(i => i && i.owner === '미배정').map(i => (
+                                    <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${filtered.some(f => f && f.id === i.id) ? 'bg-amber-400 text-white border-amber-400 scale-105' : 'bg-slate-100 text-slate-300 border-slate-100 opacity-40'}`}>
                                         {i.name} <span className="opacity-60 font-medium ml-1">{(i.weight || 0).toFixed(2)}kg</span>
                                     </button>
                                 ))}
@@ -163,4 +172,3 @@
     </script>
 </body>
 </html>
-
