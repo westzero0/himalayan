@@ -16,75 +16,67 @@
 </head>
 <body class="bg-slate-50 text-slate-900">
     <div id="root"></div>
-    <script type="text/babel">
+   <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 📍 구글 시트 주소 (공동장비/식량 통합 탭 권장)
-        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?gid=1147527820&single=true&output=csv';
+        // 📍 1. 구글 시트 주소 끝에 &gid=숫자 를 반드시 확인해서 넣어주세요!
+        const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?output=csv';
 
         const App = () => {
-            const [items, setItems] = useState([]);
-            const [activeMember, setActiveMember] = useState(null);
-            const [searchQuery, setSearchQuery] = useState('');
-            const [selectedCategory, setSelectedCategory] = useState('전체');
-
-            useEffect(() => {
-                const saved = localStorage.getItem('satpeak_distribution_v3');
-                if (saved) { setItems(JSON.parse(saved)); } 
-                else { fetchCSV(); }
-            }, []);
-
-            useEffect(() => {
-                if (items.length > 0) localStorage.setItem('satpeak_distribution_v3', JSON.stringify(items));
-            }, [items]);
-
-            const parseWeight = (w) => {
-                if (!w) return 0;
-                const num = parseFloat(w.toString().replace(/[^0-9.]/g, ''));
-                return w.toString().includes('kg') ? num : num / 1000;
-            };
+            // ... (중간 생략: 상태 설정 및 useEffect는 이전과 동일) ...
 
           const fetchCSV = () => {
+    console.log("🚀 시트 데이터 읽기 시작...");
     Papa.parse(CSV_URL, {
         download: true,
-        header: true,
+        header: false, // 인덱스(0, 1, 2)로 접근하기 위해 false
         skipEmptyLines: true,
         complete: (results) => {
-            console.log("원본 데이터:", results.data); // 데이터가 오는지 확인용
+            console.log("Raw Data (전체):", results.data);
+
+            // 📍 핵심 수정: '품목'이나 '구분'이라는 글자가 들어있는 헤더 행을 자동으로 걸러냅니다.
+            // 그리고 C열(row[2])에 품목 이름이 있는 줄만 가져옵니다.
+            const validRows = results.data.filter(row => 
+                row[2] && 
+                row[2] !== '품목' && 
+                row[2] !== '품목명' && 
+                row[2].trim() !== ""
+            );
+
+            console.log("분석 대상 행 개수:", validRows.length);
+            
             const newItems = [];
-            let lastCategory = ''; // 직전 카테고리 기억
-            let lastItemName = ''; // 직전 품목명 기억
+            let lastCategory = '';
+            let lastItemName = '';
 
-            results.data.forEach((row, idx) => {
-                let name = row['품목']?.trim();
-                let category = row['구분']?.trim();
-                const weightStr = row['개당 무게']?.trim();
-                const qtyStr = row['수량']?.trim();
-                
+            validRows.forEach((row, idx) => {
+                // 시트 구조: B(1)=구분, C(2)=품목, D(3)=수량, G(6)=무게
+                let category = row[1]?.trim(); 
+                let name = row[2]?.trim();     
+                const qtyStr = row[3]?.trim();  
+                const weightStr = row[6]?.trim(); 
+
+                // 병합셀 자동 채우기 로직
+                if (category) { lastCategory = category; } else { category = lastCategory; }
+                if (name) { lastItemName = name; } else { name = lastItemName; }
+
                 const weight = parseWeight(weightStr);
-                const qty = parseInt(qtyStr) || 1;
+                const qty = parseInt(qtyStr) || 0;
 
-                // 병합셀 처리: '구분'이 비어있으면 위 칸의 값을 가져옴
-                if (!category && name) { category = lastCategory; } 
-                else if (category) { lastCategory = category; }
-
-                // 병합셀 처리: '품목'이 비어있으면 위 칸의 값을 가져옴
-                if (!name && (qtyStr || weightStr)) { name = lastItemName; } 
-                else if (name) { lastItemName = name; }
-
-                if (name && category) {
+                if (name && qty > 0) {
                     for (let i = 0; i < qty; i++) {
                         newItems.push({
                             id: `item-${idx}-${i}`,
                             name: qty > 1 ? `${name} (${i + 1})` : name,
                             weight: weight,
-                            category: category,
+                            category: category || '기타',
                             owner: '미배정'
                         });
                     }
                 }
             });
-            console.log("가공된 데이터 개수:", newItems.length);
+
+            console.log("✅ 가공 완료 아이템:", newItems.length, "개");
             setItems(newItems);
         }
     });
@@ -172,5 +164,6 @@
     </script>
 </body>
 </html>
+
 
 
