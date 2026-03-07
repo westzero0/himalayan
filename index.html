@@ -1,5 +1,4 @@
-
-        <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -20,7 +19,7 @@
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
 
-        // 📍 여기에 구글 시트 CSV 주소를 넣으세요
+        // 📍 구글 시트 주소 (공동장비/식량 통합 탭 권장)
         const CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vRMz1Mst7D5jGzoM6osU0pdF0c0jn0TC6WLf_k7dTpsca6lQV2e5mT_BCieoXAapA/pub?output=csv';
 
         const App = () => {
@@ -30,13 +29,13 @@
             const [selectedCategory, setSelectedCategory] = useState('전체');
 
             useEffect(() => {
-                const saved = localStorage.getItem('satpeak_distribution_v2');
+                const saved = localStorage.getItem('satpeak_distribution_v3');
                 if (saved) { setItems(JSON.parse(saved)); } 
                 else { fetchCSV(); }
             }, []);
 
             useEffect(() => {
-                if (items.length > 0) localStorage.setItem('satpeak_distribution_v2', JSON.stringify(items));
+                if (items.length > 0) localStorage.setItem('satpeak_distribution_v3', JSON.stringify(items));
             }, [items]);
 
             const parseWeight = (w) => {
@@ -45,71 +44,77 @@
                 return w.toString().includes('kg') ? num : num / 1000;
             };
 
-       const fetchCSV = () => {
-    console.log("데이터 요청 중...");
-    Papa.parse(CSV_URL, {
-        download: true,
-        header: true,
-        skipEmptyLines: true,
-        complete: (results) => {
-            console.log("원본 데이터:", results.data); // 데이터가 오는지 여기서 확인
-            const newItems = [];
-            let lastCategory = '';
-            let lastItemName = '';
+            const fetchCSV = () => {
+                Papa.parse(CSV_URL, {
+                    download: true,
+                    header: true,
+                    skipEmptyLines: true,
+                    complete: (results) => {
+                        const newItems = [];
+                        let lastCategory = '';
+                        let lastItemName = '';
 
-            results.data.forEach((row, idx) => {
-                let name = row['품목']?.trim();
-                let category = row['구분']?.trim();
-                const weight = parseWeight(row['개당 무게']);
-                const qty = parseInt(row['수량']) || 0;
+                        results.data.forEach((row, idx) => {
+                            const rawCategory = row['구분']?.trim();
+                            const rawName = row['품목']?.trim();
+                            const rawWeight = row['개당 무게']?.trim();
+                            const rawQty = row['수량']?.trim();
 
-                // 병합된 '구분' 셀 처리
-                if (!category && name) { category = lastCategory; } 
-                else if (category) { lastCategory = category; }
+                            // 1. 카테고리 병합셀 추적
+                            if (rawCategory) lastCategory = rawCategory;
+                            const category = lastCategory;
 
-                // 병합된 '품목' 셀 처리
-                if (!name && (row['개당 무게'] || row['수량'])) { name = lastItemName; } 
-                else if (name) { lastItemName = name; }
+                            // 2. 품목명 병합셀 추적
+                            if (rawName) lastItemName = rawName;
+                            const name = lastItemName;
 
-                if (name && category && qty > 0) {
-                    for (let i = 0; i < qty; i++) {
-                        newItems.push({
-                            id: `item-${idx}-${i}`,
-                            name: qty > 1 ? `${name} (${i + 1})` : name,
-                            weight: weight,
-                            category: category,
-                            owner: '미배정'
+                            const weight = parseWeight(rawWeight);
+                            const qty = parseInt(rawQty) || 0;
+
+                            // 유효한 데이터 세트인 경우에만 추가
+                            if (name && category && (rawWeight || rawQty)) {
+                                for (let i = 0; i < qty; i++) {
+                                    newItems.push({
+                                        id: `item-${idx}-${i}`,
+                                        name: qty > 1 ? `${name} (${i + 1})` : name,
+                                        weight: weight,
+                                        category: category,
+                                        owner: '미배정'
+                                    });
+                                }
+                            }
                         });
+                        setItems(newItems);
                     }
-                }
-            });
-            console.log("처리된 아이템 개수:", newItems.length);
-            setItems(newItems);
-        }
-    });
-};
+                });
+            };
+
             const handleItemClick = (id) => {
                 setItems(prev => prev.map(item => {
                     if (item.id !== id) return item;
                     if (item.owner !== '미배정') return { ...item, owner: '미배정' };
-                    if (!activeMember) { alert('배분할 대원의 카드를 먼저 선택해주세요!'); return item; }
+                    if (!activeMember) { alert('대원 카드를 먼저 클릭하세요!'); return item; }
                     return { ...item, owner: activeMember };
                 }));
             };
 
-            // 📍 업데이트된 대원 명단
             const memberList = ['대장', '종민', '의준', '지호', '서영', '형욱', '상국']; 
-            const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료'];
-            const filtered = items.filter(i => i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
+            // 📍 '식량' 카테고리 추가
+            const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
+            
+            const filtered = items.filter(i => 
+                i.name.includes(searchQuery) && 
+                (selectedCategory === '전체' || i.category === selectedCategory)
+            );
 
             return (
-                <div className="max-w-6xl mx-auto p-4 pb-64">
-                    <header className="sticky top-0 bg-white shadow-sm p-4 rounded-2xl mb-6 z-20 border border-slate-200">
+                <div className="max-w-6xl mx-auto p-4 pb-64 font-sans">
+                    <header className="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm p-4 rounded-2xl mb-6 z-20 border border-slate-200">
                         <div className="flex justify-between items-center mb-4">
                             <h1 className="text-xl font-black text-slate-800 tracking-tight">🏔️ SAT PEAK 공동장비 배분</h1>
-                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_distribution_v2'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50 uppercase">Reset</button>
+                            <button onClick={() => { if(confirm('배분 데이터를 초기화할까요?')) { localStorage.removeItem('satpeak_distribution_v3'); fetchCSV(); } }} className="text-[10px] font-bold text-red-500 border border-red-100 px-2 py-1 rounded-md bg-red-50">RESET</button>
                         </div>
-                        <input type="text" placeholder="장비 검색..." className="w-full p-3 bg-slate-50 border-none rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 transition-all" onChange={e => setSearchQuery(e.target.value)} />
+                        <input type="text" placeholder="장비 검색..." className="w-full p-3 bg-slate-50 border rounded-xl mb-4 focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setSearchQuery(e.target.value)} />
                         <div className="flex gap-2 overflow-x-auto no-scrollbar">
                             {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === c ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-500'}`}>{c}</button>)}
                         </div>
@@ -121,8 +126,8 @@
                             const tw = mItems.reduce((s, i) => s + i.weight, 0);
                             const active = activeMember === m;
                             return (
-                                <div key={m} onClick={() => setActiveMember(m)} className={`bg-white p-5 rounded-2xl border-4 transition-all cursor-pointer relative ${active ? 'border-blue-500 shadow-xl -translate-y-1' : 'border-transparent shadow-sm'}`}>
-                                    {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold">선택됨</div>}
+                                <div key={m} onClick={() => setActiveMember(m)} className={`bg-white p-5 rounded-2xl border-4 transition-all cursor-pointer relative ${active ? 'border-blue-500 shadow-xl -translate-y-1' : 'border-transparent shadow-sm hover:border-slate-200'}`}>
+                                    {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-white text-[10px] px-2 py-0.5 rounded-full font-bold shadow-lg">선택됨</div>}
                                     <div className="flex justify-between items-end mb-4">
                                         <span className="text-lg font-black">{m}</span>
                                         <span className={`text-sm font-black ${tw > 23 ? 'text-red-500' : 'text-blue-600'}`}>{tw.toFixed(2)}kg</span>
@@ -146,11 +151,14 @@
                         <div className="max-w-6xl mx-auto">
                             <p className="text-[10px] font-black text-slate-400 mb-3 tracking-[0.2em] uppercase">Unassigned Gear Pool</p>
                             <div className="flex flex-wrap gap-2">
-                                {items.filter(i => i.owner === '미배정').map(i => (
-                                    <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${filtered.some(f => f.id === i.id) ? 'bg-amber-400 text-white border-amber-400 shadow-md scale-105' : 'bg-slate-100 text-slate-300 border-slate-100 opacity-40'}`}>
-                                        {i.name} <span className="opacity-60 font-medium ml-1">{i.weight.toFixed(2)}kg</span>
-                                    </button>
-                                ))}
+                                {items.filter(i => i.owner === '미배정').map(i => {
+                                    const isTarget = filtered.some(f => f.id === i.id);
+                                    return (
+                                        <button key={i.id} onClick={() => handleItemClick(i.id)} className={`px-3 py-1.5 rounded-xl text-[11px] font-bold border transition-all ${isTarget ? 'bg-amber-400 text-white border-amber-400 shadow-md scale-105' : 'bg-slate-100 text-slate-300 border-slate-100 opacity-40'}`}>
+                                            {i.name} <span className="opacity-60 font-medium ml-1">{i.weight.toFixed(2)}kg</span>
+                                        </button>
+                                    );
+                                })}
                             </div>
                         </div>
                     </footer>
@@ -163,10 +171,3 @@
     </script>
 </body>
 </html>
-
-
-
-
-
-
-
