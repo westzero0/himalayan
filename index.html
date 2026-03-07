@@ -45,18 +45,36 @@
                 return w.toString().includes('kg') ? num : num / 1000;
             };
 
-            const fetchCSV = () => {
+         const fetchCSV = () => {
                 Papa.parse(CSV_URL, {
                     download: true,
                     header: true,
                     complete: (results) => {
                         const newItems = [];
+                        let lastCategory = ''; // 직전 카테고리 기억
+                        let lastItemName = ''; // 직전 품목명 기억
+
                         results.data.forEach((row, idx) => {
-                            const name = row['품목'];
-                            const category = row['구분'];
+                            let name = row['품목'];
+                            let category = row['구분'];
                             const weight = parseWeight(row['개당 무게']);
                             const qty = parseInt(row['수량']) || 1;
 
+                            // 1. 카테고리 병합셀 처리
+                            if (!category && name) {
+                                category = lastCategory;
+                            } else if (category) {
+                                lastCategory = category;
+                            }
+
+                            // 2. 품목명 병합셀 처리 (핵심 추가!)
+                            if (!name && (row['수량'] || row['개당 무게'])) {
+                                name = lastItemName;
+                            } else if (name) {
+                                lastItemName = name;
+                            }
+
+                            // 품목명과 카테고리가 모두 확보된 경우에만 추가
                             if (name && category) {
                                 for (let i = 0; i < qty; i++) {
                                     newItems.push({
@@ -149,6 +167,7 @@
     </script>
 </body>
 </html>
+
 
 
 
