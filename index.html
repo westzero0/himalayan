@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAT PEAK 2026 물류 관리 시스템</title>
+    <title>SAT PEAK 2026 물류 관리 v14</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -16,7 +16,7 @@
         .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900">
+<body class="bg-slate-50 text-slate-900 font-sans">
     <div id="root"></div>
     <script type="text/babel">
         const { useState, useEffect, useMemo } = React;
@@ -30,23 +30,29 @@
             const [searchQuery, setSearchQuery] = useState('');
             const [selectedCategory, setSelectedCategory] = useState('전체');
             const [isPoolOpen, setIsPoolOpen] = useState(true);
+            
+            // 📍 1. 전역 가방 무게 상태 (기본 2.2kg)
+            const [globalBagWeight, setGlobalBagWeight] = useState(2.2);
 
             const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
 
             useEffect(() => {
-                const savedItems = localStorage.getItem('satpeak_items_v13');
-                const savedBags = localStorage.getItem('satpeak_bags_v13');
+                const savedItems = localStorage.getItem('satpeak_items_v14');
+                const savedBags = localStorage.getItem('satpeak_bags_v14');
+                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v14');
                 
+                if (savedGlobalWeight) setGlobalBagWeight(parseFloat(savedGlobalWeight));
+
                 if (savedItems && savedBags) {
                     setItems(JSON.parse(savedItems));
                     setBags(JSON.parse(savedBags));
                 } else {
-                    // 초기 카고백 7개 생성
+                    // 📍 2. 초기 세팅: Personal은 0으로 고정
                     const initialBags = ['대장', '종민', '의준', '지호', '서영', '형욱', '상국'].map((name, i) => ({
                         id: `bag-${Date.now()}-${i}`,
                         owner: name,
-                        bagWeight: 2.2, // 가방 자체 무게
-                        personalWeight: 3.0 // 개인짐 무게
+                        bagWeight: 2.2,
+                        personalWeight: 0.0 // 요청대로 0으로 변경
                     }));
                     setBags(initialBags);
                     fetchCSV();
@@ -54,11 +60,19 @@
             }, []);
 
             useEffect(() => {
-                if (items.length > 0) {
-                    localStorage.setItem('satpeak_items_v13', JSON.stringify(items));
-                    localStorage.setItem('satpeak_bags_v13', JSON.stringify(bags));
+                if (items.length > 0 || bags.length > 0) {
+                    localStorage.setItem('satpeak_items_v14', JSON.stringify(items));
+                    localStorage.setItem('satpeak_bags_v14', JSON.stringify(bags));
+                    localStorage.setItem('satpeak_global_weight_v14', globalBagWeight.toString());
                 }
-            }, [items, bags]);
+            }, [items, bags, globalBagWeight]);
+
+            // 📍 3. 일괄 적용 함수
+            const applyGlobalBagWeight = (newWeight) => {
+                const val = parseFloat(newWeight) || 0;
+                setGlobalBagWeight(val);
+                setBags(bags.map(b => ({ ...b, bagWeight: val })));
+            };
 
             const parseWeight = (w) => {
                 if (!w || w.toString().trim() === "") return 0;
@@ -69,33 +83,20 @@
 
             const fetchCSV = () => {
                 Papa.parse(CSV_URL, {
-                    download: true,
-                    header: false,
-                    skipEmptyLines: true,
+                    download: true, header: false, skipEmptyLines: true,
                     complete: (results) => {
                         const rows = results.data;
                         const newItems = [];
-                        let lastCategory = '';
-                        let lastItemName = '';
-
+                        let lastCategory = ''; let lastItemName = '';
                         rows.forEach((row, idx) => {
                             if (row[2] === '품목' || row[1] === '구분' || !row[2]) return;
                             let currentCat = row[1]?.trim() || lastCategory;
                             let currentName = row[2]?.trim() || lastItemName;
                             lastCategory = currentCat; lastItemName = currentName;
-
                             const qty = parseInt(row[3]) || 0;
                             const weight = parseWeight(row[6]);
-
                             for (let i = 0; i < qty; i++) {
-                                newItems.push({
-                                    id: `item-${idx}-${i}`,
-                                    originalName: currentName,
-                                    name: qty > 1 ? `${currentName} (${i + 1})` : currentName,
-                                    weight: weight,
-                                    category: currentCat,
-                                    owner: '미배정'
-                                });
+                                newItems.push({ id: `item-${idx}-${i}`, originalName: currentName, name: qty > 1 ? `${currentName} (${i + 1})` : currentName, weight: weight, category: currentCat, owner: '미배정' });
                             }
                         });
                         setItems(newItems);
@@ -103,14 +104,13 @@
                 });
             };
 
-            // 카고백 추가/삭제/수정
             const addBag = () => {
-                const newBag = { id: `bag-${Date.now()}`, owner: '새 카고백', bagWeight: 2.2, personalWeight: 0 };
+                const newBag = { id: `bag-${Date.now()}`, owner: '새 카고백', bagWeight: globalBagWeight, personalWeight: 0 };
                 setBags([...bags, newBag]);
             };
 
             const removeBag = (id) => {
-                if (confirm('이 카고백을 삭제하시겠습니까? 담긴 짐은 모두 해제됩니다.')) {
+                if (confirm('이 카고백을 삭제하시겠습니까?')) {
                     setItems(items.map(i => i.owner === id ? { ...i, owner: '미배정' } : i));
                     setBags(bags.filter(b => b.id !== id));
                     if (activeBagId === id) setActiveBagId(null);
@@ -121,7 +121,6 @@
                 setBags(bags.map(b => b.id === id ? { ...b, [field]: val } : b));
             };
 
-            // 장비 배분 (수량 1개씩 이동)
             const assignOne = (originalName) => {
                 if (!activeBagId) return alert('배분할 카고백을 먼저 선택하세요!');
                 setItems(prev => {
@@ -137,13 +136,8 @@
                 setItems(items.map(i => i.id === itemId ? { ...i, owner: '미배정' } : i));
             };
 
-            // 미배정 장비 그룹화 (수량 표기용)
             const groupedUnassigned = useMemo(() => {
-                const filtered = items.filter(i => 
-                    i.owner === '미배정' && 
-                    i.name.includes(searchQuery) && 
-                    (selectedCategory === '전체' || i.category === selectedCategory)
-                );
+                const filtered = items.filter(i => i.owner === '미배정' && i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
                 const groups = {};
                 filtered.forEach(item => {
                     if (!groups[item.originalName]) groups[item.originalName] = [];
@@ -154,26 +148,33 @@
 
             return (
                 <div className={`max-w-7xl mx-auto p-4 transition-all duration-500 ${isPoolOpen ? 'pb-[400px]' : 'pb-24'}`}>
-                    <header className="sticky top-0 bg-white/90 backdrop-blur-md shadow-sm p-5 rounded-3xl mb-8 z-20 border border-slate-200">
-                        <div className="flex justify-between items-center mb-6">
-                            <h1 className="text-2xl font-black italic text-blue-900 tracking-tighter flex items-center gap-2">
-                                🏔️ SAT PEAK <span className="text-slate-300 font-light">LOGISTICS</span>
-                            </h1>
-                            <div className="flex gap-2">
-                                <button onClick={addBag} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg hover:bg-blue-700 transition-all">+ 백 추가</button>
-                                <button onClick={() => { if(confirm('전체 초기화하시겠습니까?')) { localStorage.clear(); location.reload(); } }} className="text-[10px] font-bold text-red-400 border border-red-100 px-3 py-1 rounded-lg">RESET ALL</button>
+                    <header className="sticky top-0 bg-white/95 backdrop-blur-md shadow-sm p-6 rounded-[2rem] mb-8 z-20 border border-slate-100">
+                        <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
+                            <h1 className="text-2xl font-black italic text-blue-900 tracking-tighter">🏔️ SAT PEAK LOGISTICS <span className="text-slate-300 font-light">v14</span></h1>
+                            <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
+                                <span className="text-[11px] font-bold text-slate-500 ml-2">표준 가방 무게:</span>
+                                <input 
+                                    type="number" step="0.1" 
+                                    value={globalBagWeight} 
+                                    onChange={(e) => applyGlobalBagWeight(e.target.value)}
+                                    className="w-16 bg-white border border-slate-200 rounded-lg text-sm font-black text-center p-1 focus:ring-2 focus:ring-blue-500 outline-none"
+                                />
+                                <span className="text-[11px] font-bold text-slate-400 mr-2">kg</span>
+                            </div>
+                            <div className="flex gap-2 ml-auto">
+                                <button onClick={addBag} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all">+ 백 추가</button>
+                                <button onClick={() => { if(confirm('RESET?')) { localStorage.clear(); location.reload(); } }} className="text-[10px] font-bold text-red-400 border border-red-100 px-3 py-1 rounded-lg">RESET ALL</button>
                             </div>
                         </div>
 
                         <div className="flex flex-col md:flex-row gap-4">
-                            <input type="text" placeholder="장비 검색..." className="flex-1 p-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none" onChange={e => setSearchQuery(e.target.value)} />
+                            <input type="text" placeholder="장비 검색..." className="flex-1 p-3 bg-slate-50 border border-slate-100 rounded-2xl focus:ring-2 focus:ring-blue-500 outline-none shadow-inner" onChange={e => setSearchQuery(e.target.value)} />
                             <div className="flex gap-2 overflow-x-auto no-scrollbar py-1">
-                                {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === c ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100'}`}>{c}</button>)}
+                                {categories.map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all ${selectedCategory === c ? 'bg-blue-600 text-white shadow-md' : 'bg-white text-slate-400 border border-slate-100 hover:bg-slate-50'}`}>{c}</button>)}
                             </div>
                         </div>
                     </header>
 
-                    {/* 카고백 그리드 */}
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                         {bags.map(bag => {
                             const bagItems = items.filter(i => i.owner === bag.id);
@@ -184,43 +185,41 @@
 
                             return (
                                 <div key={bag.id} onClick={() => setActiveBagId(bag.id)} 
-                                     className={`bg-white p-6 rounded-[2rem] border-4 transition-all cursor-pointer relative animate-fadeIn ${active ? 'border-blue-500 shadow-2xl -translate-y-2' : 'border-transparent shadow-sm hover:border-slate-200'}`}>
+                                     className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all cursor-pointer relative animate-fadeIn shadow-sm ${active ? 'border-blue-500 shadow-xl -translate-y-2' : 'border-transparent hover:border-slate-200'}`}>
                                     
                                     <div className="flex justify-between items-start mb-4">
                                         <div className="flex-1">
-                                            <input value={bag.owner} onChange={e => updateBag(bag.id, 'owner', e.target.value)} onClick={e => e.stopPropagation()} className="font-black text-lg bg-transparent border-none p-0 focus:ring-0 w-full mb-1" />
+                                            <input value={bag.owner} onChange={e => updateBag(bag.id, 'owner', e.target.value)} onClick={e => e.stopPropagation()} className="font-black text-xl bg-transparent border-none p-0 focus:ring-0 w-full mb-1 text-slate-800" />
                                             <div className="flex items-center gap-2">
-                                                <div className="bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
+                                                <div className="bg-slate-50 px-2 py-1 rounded-xl border border-slate-100">
                                                     <span className="text-[9px] font-bold text-slate-400 mr-1 uppercase">BAG:</span>
                                                     <input type="number" step="0.1" value={bag.bagWeight} onChange={e => updateBag(bag.id, 'bagWeight', e.target.value)} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center" />
                                                 </div>
-                                                <div className="bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                                    <span className="text-[9px] font-bold text-slate-400 mr-1 uppercase">PERSONAL:</span>
-                                                    <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center" />
+                                                <div className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-100">
+                                                    <span className="text-[9px] font-bold text-blue-400 mr-1 uppercase">PERS:</span>
+                                                    <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center text-blue-700" />
                                                 </div>
                                             </div>
                                         </div>
                                         <button onClick={(e) => { e.stopPropagation(); removeBag(bag.id); }} className="text-slate-300 hover:text-red-500 p-1">✕</button>
                                     </div>
 
-                                    <div className="flex justify-between items-end mb-2">
-                                        <div className="text-left">
-                                            <p className={`text-3xl font-black ${totalWeight > 23 ? 'text-red-500' : 'text-slate-800'}`}>
-                                                {totalWeight.toFixed(2)}<span className="text-sm ml-1 font-bold">kg</span>
-                                            </p>
-                                        </div>
+                                    <div className="flex justify-between items-end mb-2 px-1">
+                                        <p className={`text-3xl font-black tracking-tighter ${totalWeight > 23 ? 'text-red-500' : 'text-slate-800'}`}>
+                                            {totalWeight.toFixed(2)}<span className="text-sm ml-1 font-bold">kg</span>
+                                        </p>
                                         <p className={`text-[10px] font-black px-2 py-1 rounded-lg ${remaining < 0 ? 'bg-red-50 text-red-500' : 'bg-blue-50 text-blue-500'}`}>
                                             {remaining < 0 ? `초과 ${Math.abs(remaining).toFixed(2)}` : `여유 ${remaining.toFixed(2)}`}
                                         </p>
                                     </div>
 
-                                    <div className="h-2 bg-slate-100 rounded-full mb-4 overflow-hidden border border-slate-50">
-                                        <div className={`h-full transition-all duration-700 ${totalWeight > 23 ? 'bg-red-500' : 'bg-blue-600'}`} style={{width: `${Math.min((totalWeight/23)*100, 100)}%`}} />
+                                    <div className="h-2.5 bg-slate-100 rounded-full mb-4 overflow-hidden border border-slate-50 shadow-inner">
+                                        <div className={`h-full transition-all duration-700 ${totalWeight > 23 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-blue-600'}`} style={{width: `${Math.min((totalWeight/23)*100, 100)}%`}} />
                                     </div>
 
                                     <div className="flex flex-wrap gap-1 min-h-[60px] content-start">
                                         {bagItems.map(i => (
-                                            <span key={i.id} onClick={(e) => { e.stopPropagation(); handleItemUnassign(i.id); }} className="text-[9px] px-2 py-1 rounded-lg font-bold bg-slate-50 border border-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all">
+                                            <span key={i.id} onClick={(e) => { e.stopPropagation(); handleItemUnassign(i.id); }} className="text-[9px] px-2 py-1 rounded-lg font-bold bg-slate-50 border border-slate-100 text-slate-500 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all active:scale-95">
                                                 {i.name}
                                             </span>
                                         ))}
@@ -230,38 +229,32 @@
                         })}
                     </div>
 
-                    {/* 하단 접이식 기어 풀 */}
-                    <footer className={`fixed bottom-0 left-0 right-0 bg-white shadow-[0_-20px_50px_rgba(0,0,0,0.1)] border-t border-slate-200 transition-all duration-500 z-30 ${isPoolOpen ? 'h-[360px]' : 'h-16'}`}>
+                    <footer className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-xl shadow-[0_-20px_50px_rgba(0,0,0,0.1)] border-t border-slate-200 transition-all duration-500 z-30 ${isPoolOpen ? 'h-[360px]' : 'h-16'}`}>
                         <div className="max-w-7xl mx-auto px-6 h-full flex flex-col">
-                            <div className="flex justify-between items-center h-16 flex-shrink-0 cursor-pointer" onClick={() => setIsPoolOpen(!isPoolOpen)}>
+                            <div className="flex justify-between items-center h-16 flex-shrink-0 cursor-pointer group" onClick={() => setIsPoolOpen(!isPoolOpen)}>
                                 <div className="flex items-center gap-4">
                                     <span className="text-xs font-black tracking-widest text-slate-400 uppercase">Unassigned Gear Pool</span>
-                                    <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black">
-                                        남은 품목: {Object.keys(groupedUnassigned).length}종 / {items.filter(i => i.owner === '미배정').length}개
+                                    <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-black shadow-sm">
+                                        {Object.keys(groupedUnassigned).length}종 / {items.filter(i => i.owner === '미배정').length}개 남음
                                     </span>
                                 </div>
-                                <button className="bg-slate-100 p-2 rounded-xl text-slate-500 hover:bg-slate-200 transition-all font-bold text-xs">
-                                    {isPoolOpen ? '▼ 숨기기' : '▲ 펼치기'}
+                                <button className="bg-slate-50 px-4 py-2 rounded-xl text-slate-500 group-hover:bg-slate-100 transition-all font-bold text-xs border border-slate-100">
+                                    {isPoolOpen ? '▼ POOL 숨기기' : '▲ POOL 펼치기'}
                                 </button>
                             </div>
                             
                             <div className={`flex-1 overflow-y-auto pb-10 no-scrollbar ${!isPoolOpen && 'hidden'}`}>
                                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                                     {Object.entries(groupedUnassigned).map(([name, group]) => (
-                                        <div key={name} className="flex flex-col bg-white border border-slate-100 p-3 rounded-2xl shadow-sm hover:border-blue-200 hover:shadow-md transition-all group">
+                                        <div key={name} className="flex flex-col bg-white border border-slate-100 p-3 rounded-2xl shadow-sm hover:border-blue-200 hover:shadow-md transition-all">
                                             <div className="flex justify-between items-start mb-2">
                                                 <div className="min-w-0 pr-2">
                                                     <p className="text-[11px] font-black truncate text-slate-700" title={name}>{name}</p>
                                                     <p className="text-[9px] font-bold text-slate-400">{group[0].weight.toFixed(2)}kg/ea</p>
                                                 </div>
-                                                <span className="bg-slate-100 text-slate-600 text-[10px] px-1.5 py-0.5 rounded-lg font-black">{group.length}</span>
+                                                <span className="bg-slate-50 text-slate-600 text-[10px] px-1.5 py-0.5 rounded-lg font-black border border-slate-100">{group.length}</span>
                                             </div>
-                                            <button 
-                                                onClick={() => assignOne(name)}
-                                                className="w-full bg-amber-400 text-white py-2 rounded-xl text-[10px] font-black shadow-sm hover:bg-amber-500 active:scale-95 transition-all"
-                                            >
-                                                담기 (-1)
-                                            </button>
+                                            <button onClick={() => assignOne(name)} className="w-full bg-amber-400 text-white py-2 rounded-xl text-[10px] font-black shadow-sm hover:bg-amber-500 active:scale-95 transition-all">담기 (-1)</button>
                                         </div>
                                     ))}
                                 </div>
