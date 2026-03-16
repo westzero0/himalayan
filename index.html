@@ -175,18 +175,14 @@
                         </div>
                     </header>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
     {bags.map(bag => {
+        // [기존 로직 유지] 가방 내 아이템 필터링 및 그룹화
         const bagItems = items.filter(i => i.owner === bag.id);
-        
-        // 📍 1. 이 가방에 담긴 아이템들을 이름별로 그룹화합니다.
         const groupedBagItems = {};
         bagItems.forEach(item => {
             if (!groupedBagItems[item.originalName]) {
-                groupedBagItems[item.originalName] = {
-                    ids: [], // 하나씩 빼기 위해 ID 목록을 보관합니다.
-                    weight: item.weight
-                };
+                groupedBagItems[item.originalName] = { ids: [], weight: item.weight };
             }
             groupedBagItems[item.originalName].ids.push(item.id);
         });
@@ -200,23 +196,41 @@
             <div key={bag.id} onClick={() => setActiveBagId(bag.id)} 
                  className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all cursor-pointer relative animate-fadeIn shadow-sm ${active ? 'border-blue-500 shadow-xl -translate-y-2' : 'border-transparent hover:border-slate-200'}`}>
                 
+                {/* 1. 헤더: 이름 수정 및 삭제 버튼 */}
                 <div className="flex justify-between items-start mb-4">
-                    <div className="flex-1">
-                        <input value={bag.owner} onChange={e => updateBag(bag.id, 'owner', e.target.value)} onClick={e => e.stopPropagation()} className="font-black text-xl bg-transparent border-none p-0 focus:ring-0 w-full mb-1 text-slate-800" />
+                    <div className="flex-1 group">
+                        <div className="flex items-center gap-2 mb-1 relative">
+                            <input 
+                                value={bag.owner} 
+                                onChange={e => updateBag(bag.id, 'owner', e.target.value)} 
+                                onKeyDown={e => e.key === 'Enter' && e.target.blur()} 
+                                onClick={e => e.stopPropagation()} 
+                                className="font-black text-xl bg-transparent border-b-2 border-transparent hover:border-slate-200 focus:border-blue-500 focus:ring-0 w-full text-slate-800 transition-all outline-none"
+                                placeholder="이름 입력"
+                            />
+                            {/* 편집 중일 때만 나타나는 체크 아이콘 */}
+                            <span className="text-blue-500 opacity-0 group-focus-within:opacity-100 transition-opacity text-sm font-bold">✓</span>
+                            <span className="text-slate-200 group-hover:group-focus-within:opacity-0 text-xs transition-colors">✎</span>
+                        </div>
+
+                        {/* 2. 무게 설정: BAG / PERS 입력창 */}
                         <div className="flex items-center gap-2">
-                            <div className="bg-slate-50 px-2 py-1 rounded-xl border border-slate-100">
-                                <span className="text-[9px] font-bold text-slate-400 mr-1 uppercase">BAG:</span>
-                                <input type="number" step="0.1" value={bag.bagWeight} onChange={e => updateBag(bag.id, 'bagWeight', e.target.value)} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center" />
+                            <div className="bg-slate-50 px-2 py-1 rounded-xl border border-slate-100 flex items-center focus-within:border-blue-500 focus-within:bg-white transition-all shadow-inner">
+                                <span className="text-[9px] font-black text-slate-400 mr-1 uppercase">Bag</span>
+                                <input type="number" step="0.1" value={bag.bagWeight} onChange={e => updateBag(bag.id, 'bagWeight', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center" />
+                                <span className="text-blue-500 opacity-0 focus-within:opacity-100 text-[10px] ml-0.5">✓</span>
                             </div>
-                            <div className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-100">
-                                <span className="text-[9px] font-bold text-blue-400 mr-1 uppercase">PERS:</span>
-                                <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center text-blue-700" />
+                            <div className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-100 flex items-center focus-within:border-blue-500 focus-within:bg-white transition-all shadow-inner">
+                                <span className="text-[9px] font-black text-blue-400 mr-1 uppercase">Pers</span>
+                                <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center text-blue-700" />
+                                <span className="text-blue-500 opacity-0 focus-within:opacity-100 text-[10px] ml-0.5">✓</span>
                             </div>
                         </div>
                     </div>
-                    <button onClick={(e) => { e.stopPropagation(); removeBag(bag.id); }} className="text-slate-300 hover:text-red-500 p-1">✕</button>
+                    <button onClick={(e) => { e.stopPropagation(); removeBag(bag.id); }} className="text-slate-200 hover:text-red-500 p-1 transition-colors">✕</button>
                 </div>
 
+                {/* 3. 메인 무게 및 게이지 */}
                 <div className="flex justify-between items-end mb-2 px-1">
                     <p className={`text-3xl font-black tracking-tighter ${totalWeight > 23 ? 'text-red-500' : 'text-slate-800'}`}>
                         {totalWeight.toFixed(2)}<span className="text-sm ml-1 font-bold">kg</span>
@@ -227,30 +241,21 @@
                 </div>
 
                 <div className="h-2.5 bg-slate-100 rounded-full mb-4 overflow-hidden border border-slate-50 shadow-inner">
-                    <div className={`h-full transition-all duration-700 ${totalWeight > 23 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.5)]' : 'bg-blue-600'}`} style={{width: `${Math.min((totalWeight/23)*100, 100)}%`}} />
+                    <div className={`h-full transition-all duration-700 ${totalWeight > 23 ? 'bg-red-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]' : 'bg-blue-600'}`} style={{width: `${Math.min((totalWeight/23)*100, 100)}%`}} />
                 </div>
 
-                {/* 📍 2. 그룹화된 장비를 '품목(수량)' 형태로 출력합니다. */}
-                <div className="flex flex-wrap gap-1.5 min-h-[60px] content-start pt-2 border-t border-slate-50">
+                {/* 4. 가방 내부 아이템 (그룹화 표시 및 클릭 시 1개씩 제거) */}
+                <div className="flex flex-wrap gap-1.5 min-h-[60px] content-start pt-3 border-t border-slate-50">
                     {Object.entries(groupedBagItems).map(([name, group]) => (
-                        <span 
-                            key={name} 
-                            onClick={(e) => { 
-                                e.stopPropagation(); 
-                                // 해당 품목의 마지막 ID 하나만 골라서 해제(미배정으로 돌림)합니다.
-                                handleItemUnassign(group.ids[group.ids.length - 1]); 
-                            }} 
-                            className="flex items-center gap-1 text-[10px] px-2 py-1 rounded-lg font-bold bg-slate-50 border border-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-500 hover:border-red-100 transition-all active:scale-95 shadow-sm"
-                        >
+                        <span key={name} onClick={(e) => { e.stopPropagation(); handleItemUnassign(group.ids[group.ids.length - 1]); }} 
+                              className="flex items-center gap-1.5 text-[10px] px-2.5 py-1.5 rounded-xl font-bold bg-white border border-slate-100 text-slate-600 hover:bg-red-50 hover:text-red-600 hover:border-red-100 transition-all active:scale-95 shadow-sm group/item">
                             {name}
-                            <span className="bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded-md text-[9px] font-black">
+                            <span className="bg-blue-600 text-white px-1.5 py-0.5 rounded-lg text-[9px] font-black group-hover/item:bg-red-500">
                                 {group.ids.length}
                             </span>
                         </span>
                     ))}
-                    {bagItems.length === 0 && (
-                        <span className="text-[10px] text-slate-300 italic w-full text-center mt-2">비어있는 가방</span>
-                    )}
+                    {bagItems.length === 0 && <span className="text-[10px] text-slate-300 italic w-full text-center mt-3">비어있음</span>}
                 </div>
             </div>
         );
