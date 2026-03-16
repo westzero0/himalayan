@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAT PEAK 2026 물류 관리 v22</title>
+    <title>SAT PEAK 2026 물류 관리 v24</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -35,9 +35,9 @@
             const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
 
             useEffect(() => {
-                const savedItems = localStorage.getItem('satpeak_items_v22');
-                const savedBags = localStorage.getItem('satpeak_bags_v22');
-                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v22');
+                const savedItems = localStorage.getItem('satpeak_items_v24');
+                const savedBags = localStorage.getItem('satpeak_bags_v24');
+                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v24');
                 
                 if (savedGlobalWeight) setGlobalBagWeight(parseFloat(savedGlobalWeight));
 
@@ -59,9 +59,9 @@
 
             useEffect(() => {
                 if (items.length > 0 || bags.length > 0) {
-                    localStorage.setItem('satpeak_items_v22', JSON.stringify(items));
-                    localStorage.setItem('satpeak_bags_v22', JSON.stringify(bags));
-                    localStorage.setItem('satpeak_global_weight_v22', globalBagWeight.toString());
+                    localStorage.setItem('satpeak_items_v24', JSON.stringify(items));
+                    localStorage.setItem('satpeak_bags_v24', JSON.stringify(bags));
+                    localStorage.setItem('satpeak_global_weight_v24', globalBagWeight.toString());
                 }
             }, [items, bags, globalBagWeight]);
 
@@ -133,23 +133,7 @@
                 setItems(items.map(i => i.id === itemId ? { ...i, owner: '미배정' } : i));
             };
 
-            const getLightestBagId = (currentItems, validBags) => {
-                let minWeight = Infinity;
-                let targetBagId = validBags[0]?.id;
-                
-                validBags.forEach(bag => {
-                    const bagItems = currentItems.filter(i => i.owner === bag.id);
-                    const gearWeight = bagItems.reduce((s, i) => s + (i.weight || 0), 0);
-                    const totalWeight = (parseFloat(bag.bagWeight) || 0) + (parseFloat(bag.personalWeight) || 0) + gearWeight;
-                    
-                    if (totalWeight < minWeight) {
-                        minWeight = totalWeight;
-                        targetBagId = bag.id;
-                    }
-                });
-                return targetBagId;
-            };
-
+            // 📍 스마트 전체 번개 배분 (종류별 1/N + 여유 중량 우선)
             const autoSpread = () => {
                 const validBags = bags.filter(b => !b.isExcluded);
                 if (validBags.length === 0) return alert('번개 배분을 받을 수 있는 카고백이 없습니다. 상단에서 제외 설정을 해제하세요.');
@@ -159,19 +143,39 @@
                 );
                 
                 if (currentUnassigned.length === 0) return alert('배분할 장비가 없습니다.');
-                if (!confirm(`스마트 배분: ${currentUnassigned.length}개의 장비를 제외되지 않은 ${validBags.length}개의 가방 중 '여유가 가장 많은 가방'부터 우선 채웁니다. 진행하시겠습니까?`)) return;
+                if (!confirm(`스마트 배분: ${currentUnassigned.length}개의 장비를 제외되지 않은 ${validBags.length}개의 가방에 1/N로 고르게 분배합니다. (가벼운 가방부터 우선 배정)`)) return;
 
                 let updatedItems = [...items];
-                const sortedUnassigned = [...currentUnassigned].sort((a, b) => b.weight - a.weight);
+                
+                const groups = {};
+                currentUnassigned.forEach(item => {
+                    if (!groups[item.originalName]) groups[item.originalName] = [];
+                    groups[item.originalName].push(item);
+                });
 
-                sortedUnassigned.forEach(item => {
-                    const targetBagId = getLightestBagId(updatedItems, validBags);
-                    const targetIdx = updatedItems.findIndex(ui => ui.id === item.id);
-                    if(targetIdx !== -1) updatedItems[targetIdx] = { ...updatedItems[targetIdx], owner: targetBagId };
+                const sortedGroupNames = Object.keys(groups).sort((a, b) => groups[b][0].weight - groups[a][0].weight);
+
+                sortedGroupNames.forEach(name => {
+                    const groupItems = groups[name];
+                    
+                    const bagWeights = validBags.map(bag => {
+                        const bagItems = updatedItems.filter(i => i.owner === bag.id);
+                        const gearWeight = bagItems.reduce((s, i) => s + (i.weight || 0), 0);
+                        const totalWeight = (parseFloat(bag.bagWeight) || 0) + (parseFloat(bag.personalWeight) || 0) + gearWeight;
+                        return { id: bag.id, weight: totalWeight };
+                    });
+                    bagWeights.sort((a, b) => a.weight - b.weight);
+
+                    groupItems.forEach((item, idx) => {
+                        const targetBagId = bagWeights[idx % bagWeights.length].id;
+                        const targetIdx = updatedItems.findIndex(ui => ui.id === item.id);
+                        if(targetIdx !== -1) updatedItems[targetIdx] = { ...updatedItems[targetIdx], owner: targetBagId };
+                    });
                 });
                 setItems(updatedItems);
             };
 
+            // 📍 특정 품목 개별 번개 배분 (1/N + 여유 중량 우선)
             const spreadSpecificItem = (originalName) => {
                 const validBags = bags.filter(b => !b.isExcluded);
                 if (validBags.length === 0) return alert('번개 배분을 받을 수 있는 카고백이 없습니다. 상단에서 제외 설정을 해제하세요.');
@@ -180,8 +184,17 @@
                 if (unassignedItems.length === 0) return;
 
                 let updatedItems = [...items];
-                unassignedItems.forEach(item => {
-                    const targetBagId = getLightestBagId(updatedItems, validBags);
+                
+                const bagWeights = validBags.map(bag => {
+                    const bagItems = updatedItems.filter(i => i.owner === bag.id);
+                    const gearWeight = bagItems.reduce((s, i) => s + (i.weight || 0), 0);
+                    const totalWeight = (parseFloat(bag.bagWeight) || 0) + (parseFloat(bag.personalWeight) || 0) + gearWeight;
+                    return { id: bag.id, weight: totalWeight };
+                });
+                bagWeights.sort((a, b) => a.weight - b.weight);
+
+                unassignedItems.forEach((item, idx) => {
+                    const targetBagId = bagWeights[idx % bagWeights.length].id;
                     const targetIdx = updatedItems.findIndex(ui => ui.id === item.id);
                     if (targetIdx !== -1) updatedItems[targetIdx] = { ...updatedItems[targetIdx], owner: targetBagId };
                 });
@@ -204,7 +217,7 @@
                         <header className="sticky top-0 bg-white/95 backdrop-blur-md shadow-sm p-6 rounded-[2rem] mb-8 z-20 border border-slate-100">
                             <div className="flex flex-wrap justify-between items-center gap-4 mb-4">
                                 <h1 className="text-2xl font-black italic text-blue-900 tracking-tighter flex items-center gap-2">
-                                    🏔️ SAT PEAK <span className="text-slate-300 font-light text-sm italic">LOGISTICS v22</span>
+                                    🏔️ SAT PEAK <span className="text-slate-300 font-light text-sm italic">LOGISTICS v24</span>
                                 </h1>
                                 <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
                                     <span className="text-[11px] font-bold text-slate-500 ml-2">표준 가방:</span>
@@ -218,7 +231,6 @@
                                 </div>
                             </div>
 
-                            {/* 📍 중앙 컨트롤 패널: 번개 배분 제외 칩 리스트 */}
                             <div className="flex items-center gap-3 mb-4 p-3 bg-slate-50 rounded-2xl border border-slate-100 overflow-x-auto no-scrollbar">
                                 <span className="text-[10px] font-bold text-slate-400 uppercase whitespace-nowrap">⚡ 번개 배분 제외:</span>
                                 {bags.map(b => (
@@ -256,7 +268,6 @@
                                 const active = activeBagId === bag.id;
                                 const remaining = 23 - totalWeight;
 
-                                // 📍 카드 UI 정리 (제외 시 약간의 시각적 피드백만 유지)
                                 return (
                                     <div key={bag.id} onClick={() => setActiveBagId(bag.id)} 
                                          className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all duration-300 cursor-pointer relative animate-fadeIn
@@ -268,18 +279,23 @@
 
                                         <div className="flex justify-between items-start mb-4">
                                             <div className="flex-1 group/name pr-2">
-                                                <div className="flex items-center gap-2 mb-1 relative">
+                                                {/* 📍 이름 입력창 테두리 강조 수정 부분 */}
+                                                <div className="flex items-center gap-2 mb-2 relative">
                                                     <input 
                                                         id={`input-name-${bag.id}`}
                                                         value={bag.owner} 
                                                         onChange={e => updateBag(bag.id, 'owner', e.target.value)} 
                                                         onKeyDown={e => e.key === 'Enter' && e.target.blur()} 
                                                         onClick={e => e.stopPropagation()} 
-                                                        className={`font-black text-xl bg-transparent border-b-2 border-transparent focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 rounded-lg px-1 w-full text-slate-800 transition-all outline-none ${active ? 'text-blue-900' : ''}`}
+                                                        className={`font-black text-xl bg-transparent border-2 border-transparent focus:border-blue-400 focus:bg-blue-50/50 focus:ring-4 focus:ring-blue-100 rounded-xl px-2 py-1 w-full text-slate-800 transition-all outline-none ${active ? 'text-blue-900' : ''}`}
                                                         placeholder="이름 입력"
                                                     />
-                                                    <button onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).focus(); }} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-all group-focus-within/name:hidden"><span className="text-slate-300 group-hover/name:text-blue-500 text-sm">✎</span></button>
-                                                    <button onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).blur(); }} className="hidden group-focus-within/name:flex flex-shrink-0 w-8 h-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg animate-fadeIn"><span className="text-xs">✓</span></button>
+                                                    <button onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).focus(); }} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-all group-focus-within/name:hidden">
+                                                        <span className="text-slate-300 group-hover/name:text-blue-500 text-sm">✎</span>
+                                                    </button>
+                                                    <button onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).blur(); }} className="hidden group-focus-within/name:flex flex-shrink-0 w-8 h-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg animate-fadeIn">
+                                                        <span className="text-xs font-bold">✓</span>
+                                                    </button>
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <div className="group/bag bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 flex items-center focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 focus-within:bg-white transition-all">
