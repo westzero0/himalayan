@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAT PEAK 2026 물류 관리 v15</title>
+    <title>SAT PEAK 2026 물류 관리 v18</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -35,9 +35,9 @@
             const categories = ['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'];
 
             useEffect(() => {
-                const savedItems = localStorage.getItem('satpeak_items_v15');
-                const savedBags = localStorage.getItem('satpeak_bags_v15');
-                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v15');
+                const savedItems = localStorage.getItem('satpeak_items_v18');
+                const savedBags = localStorage.getItem('satpeak_bags_v18');
+                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v18');
                 
                 if (savedGlobalWeight) setGlobalBagWeight(parseFloat(savedGlobalWeight));
 
@@ -58,9 +58,9 @@
 
             useEffect(() => {
                 if (items.length > 0 || bags.length > 0) {
-                    localStorage.setItem('satpeak_items_v15', JSON.stringify(items));
-                    localStorage.setItem('satpeak_bags_v15', JSON.stringify(bags));
-                    localStorage.setItem('satpeak_global_weight_v15', globalBagWeight.toString());
+                    localStorage.setItem('satpeak_items_v18', JSON.stringify(items));
+                    localStorage.setItem('satpeak_bags_v18', JSON.stringify(bags));
+                    localStorage.setItem('satpeak_global_weight_v18', globalBagWeight.toString());
                 }
             }, [items, bags, globalBagWeight]);
 
@@ -132,6 +132,31 @@
                 setItems(items.map(i => i.id === itemId ? { ...i, owner: '미배정' } : i));
             };
 
+            // 📍 번개 배분 (Auto-Spread) 로직
+            const autoSpread = () => {
+                if (bags.length === 0) return alert('배분할 카고백이 없습니다. 백을 먼저 추가해주세요.');
+
+                const currentUnassigned = items.filter(i => 
+                    i.owner === '미배정' && 
+                    i.name.includes(searchQuery) && 
+                    (selectedCategory === '전체' || i.category === selectedCategory)
+                );
+
+                if (currentUnassigned.length === 0) return alert('현재 조건에 맞는 미배정 장비가 없습니다.');
+
+                if (!confirm(`현재 화면에 필터링된 ${currentUnassigned.length}개의 장비를 ${bags.length}개의 카고백에 골고루 배분하시겠습니까?`)) return;
+
+                let updatedItems = [...items];
+                currentUnassigned.forEach((item, idx) => {
+                    const targetBag = bags[idx % bags.length]; // 순차적으로 가방에 할당
+                    const targetIdx = updatedItems.findIndex(ui => ui.id === item.id);
+                    if(targetIdx !== -1) {
+                        updatedItems[targetIdx] = { ...updatedItems[targetIdx], owner: targetBag.id };
+                    }
+                });
+                setItems(updatedItems);
+            };
+
             const groupedUnassigned = useMemo(() => {
                 const filtered = items.filter(i => i.owner === '미배정' && i.name.includes(searchQuery) && (selectedCategory === '전체' || i.category === selectedCategory));
                 const groups = {};
@@ -143,18 +168,22 @@
             }, [items, searchQuery, selectedCategory]);
 
             return (
-                <> {/* 📍 문법 오류 해결을 위한 Fragment 추가 */}
+                <>
                     <div className={`max-w-7xl mx-auto p-4 transition-all duration-500 ${isPoolOpen ? 'pb-[400px]' : 'pb-24'}`}>
                         <header className="sticky top-0 bg-white/95 backdrop-blur-md shadow-sm p-6 rounded-[2rem] mb-8 z-20 border border-slate-100">
                             <div className="flex flex-wrap justify-between items-center gap-4 mb-6">
-                                <h1 className="text-2xl font-black italic text-blue-900 tracking-tighter">🏔️ SAT PEAK LOGISTICS <span className="text-slate-300 font-light text-sm italic">v15</span></h1>
+                                <h1 className="text-2xl font-black italic text-blue-900 tracking-tighter flex items-center gap-2">
+                                    🏔️ SAT PEAK <span className="text-slate-300 font-light">LOGISTICS v18</span>
+                                </h1>
                                 <div className="flex items-center gap-3 bg-slate-50 p-2 rounded-2xl border border-slate-100">
                                     <span className="text-[11px] font-bold text-slate-500 ml-2">표준 가방:</span>
                                     <input type="number" step="0.1" value={globalBagWeight} onChange={(e) => applyGlobalBagWeight(e.target.value)} className="w-16 bg-white border border-slate-200 rounded-lg text-sm font-black text-center p-1 focus:ring-2 focus:ring-blue-500 outline-none" />
                                     <span className="text-[11px] font-bold text-slate-400 mr-2">kg</span>
                                 </div>
                                 <div className="flex gap-2 ml-auto">
-                                    <button onClick={addBag} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-lg hover:bg-blue-700 active:scale-95 transition-all">+ 백 추가</button>
+                                    {/* 📍 번개 배분 버튼 추가 */}
+                                    <button onClick={autoSpread} className="bg-amber-400 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md hover:bg-amber-500 active:scale-95 transition-all">⚡ 번개 배분</button>
+                                    <button onClick={addBag} className="bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 active:scale-95 transition-all">+ 백 추가</button>
                                     <button onClick={() => { if(confirm('RESET?')) { localStorage.clear(); location.reload(); } }} className="text-[10px] font-bold text-red-400 border border-red-100 px-3 py-1 rounded-lg">RESET ALL</button>
                                 </div>
                             </div>
@@ -183,24 +212,46 @@
 
                                 return (
                                     <div key={bag.id} onClick={() => setActiveBagId(bag.id)} 
-                                         className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all duration-300 cursor-pointer relative animate-fadeIn ${active ? 'border-blue-600 shadow-[0_0_25px_rgba(37,99,235,0.2)] -translate-y-2 bg-blue-50/10' : 'border-transparent shadow-sm hover:border-slate-200 hover:shadow-md'}`}>
+                                         className={`bg-white p-6 rounded-[2.5rem] border-4 transition-all duration-300 cursor-pointer relative animate-fadeIn
+                                         ${active ? 'border-blue-600 shadow-[0_0_25px_rgba(37,99,235,0.2)] -translate-y-2 bg-blue-50/10' : 'border-transparent shadow-sm hover:border-slate-200 hover:shadow-md'}`}>
                                         
-                                        {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg z-10">SELECTED</div>}
+                                        {active && <div className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-600 text-white text-[10px] font-black px-3 py-1 rounded-full shadow-lg z-10 uppercase">Selected</div>}
 
                                         <div className="flex justify-between items-start mb-4">
-                                            <div className="flex-1 group">
+                                            <div className="flex-1 group/name">
                                                 <div className="flex items-center gap-2 mb-1 relative">
-                                                    <input id={`input-name-${bag.id}`} value={bag.owner} onChange={e => updateBag(bag.id, 'owner', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} onClick={e => e.stopPropagation()} className={`font-black text-xl bg-transparent border-b-2 border-transparent focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 rounded-lg px-1 w-full text-slate-800 transition-all outline-none ${active ? 'text-blue-900' : ''}`} placeholder="이름 입력" />
-                                                    <button onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).focus(); }} className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-all"><span className="text-slate-300 group-hover:text-blue-500 text-sm">✎</span></button>
+                                                    <input 
+                                                        id={`input-name-${bag.id}`}
+                                                        value={bag.owner} 
+                                                        onChange={e => updateBag(bag.id, 'owner', e.target.value)} 
+                                                        onKeyDown={e => e.key === 'Enter' && e.target.blur()} 
+                                                        onClick={e => e.stopPropagation()} 
+                                                        className={`font-black text-xl bg-transparent border-b-2 border-transparent focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100 rounded-lg px-1 w-full text-slate-800 transition-all outline-none ${active ? 'text-blue-900' : ''}`}
+                                                        placeholder="이름 입력"
+                                                    />
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).focus(); }}
+                                                        className="flex-shrink-0 w-8 h-8 flex items-center justify-center rounded-full hover:bg-slate-100 transition-all group-focus-within/name:hidden"
+                                                    >
+                                                        <span className="text-slate-300 group-hover/name:text-blue-500 text-sm">✎</span>
+                                                    </button>
+                                                    <button 
+                                                        onClick={(e) => { e.stopPropagation(); document.getElementById(`input-name-${bag.id}`).blur(); }}
+                                                        className="hidden group-focus-within/name:flex flex-shrink-0 w-8 h-8 items-center justify-center rounded-full bg-blue-600 text-white shadow-lg animate-fadeIn"
+                                                    >
+                                                        <span className="text-xs">✓</span>
+                                                    </button>
                                                 </div>
                                                 <div className="flex items-center gap-2">
-                                                    <div className="bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 flex items-center focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 focus-within:bg-white transition-all">
+                                                    <div className="group/bag bg-slate-50 px-2 py-1 rounded-xl border border-slate-200 flex items-center focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 focus-within:bg-white transition-all">
                                                         <span className="text-[9px] font-black text-slate-400 mr-1">BAG</span>
                                                         <input type="number" step="0.1" value={bag.bagWeight} onChange={e => updateBag(bag.id, 'bagWeight', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center" />
+                                                        <span className="hidden group-focus-within/bag:inline text-blue-500 text-[10px] ml-1 font-bold">✓</span>
                                                     </div>
-                                                    <div className="bg-blue-50 px-2 py-1 rounded-xl border border-blue-200 flex items-center focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 focus-within:bg-white transition-all">
+                                                    <div className="group/pers bg-blue-50 px-2 py-1 rounded-xl border border-blue-200 flex items-center focus-within:ring-4 focus-within:ring-blue-100 focus-within:border-blue-500 focus-within:bg-white transition-all">
                                                         <span className="text-[9px] font-black text-blue-500 mr-1">PERS</span>
                                                         <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} onKeyDown={e => e.key === 'Enter' && e.target.blur()} onClick={e => e.stopPropagation()} className="w-8 bg-transparent text-[10px] font-black border-none p-0 focus:ring-0 text-center text-blue-800" />
+                                                        <span className="hidden group-focus-within/pers:inline text-blue-500 text-[10px] ml-1 font-bold">✓</span>
                                                     </div>
                                                 </div>
                                             </div>
