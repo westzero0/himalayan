@@ -9,7 +9,8 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html-to-image/1.11.11/html-to-image.min.js"></script>
+    
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -173,34 +174,29 @@ const exportToKakao = () => {
         .catch(err => alert('복사에 실패했습니다.'));
 };
 
-// 2. 해상도(선명도)를 극대화한 이미지 저장 함수
+// 2. 이미지 저장 함수 (html-to-image 버전으로 교체)
 const exportToImage = () => {
     const target = document.getElementById('export-container');
     if (!target) return alert('캡처 영역을 찾을 수 없습니다.');
     
-    // 📍 현재 사용 중인 기기의 디스플레이 픽셀 밀도(DPI)를 가져옵니다.
-    const dpi = window.devicePixelRatio || 1;
-    
-    html2canvas(target, { 
+    // 📍 Tailwind CSS의 색상을 완벽하게 렌더링하고 해상도를 2배(pixelRatio)로 튀깁니다.
+    htmlToImage.toPng(target, { 
         backgroundColor: '#f8fafc',
-        // 📍 핵심: 기기 DPI의 2배(기본 모니터 기준 2배, 레티나 기준 4배)로 캔버스를 렌더링합니다.
-        scale: dpi * 2, 
-        useCORS: true,
-        allowTaint: true // 혹시 모를 폰트/이미지 렌더링 오류 방지
-    }).then(canvas => {
+        pixelRatio: 2 // 고해상도 보장
+    })
+    .then((dataUrl) => {
         const link = document.createElement('a');
         const dateStr = new Date().toISOString().slice(0,10);
         link.download = `SAT_PEAK_카고백_현황_${dateStr}.png`;
-        // 📍 PNG 품질을 강제로 1.0(100%)으로 밀어넣습니다.
-        link.href = canvas.toDataURL('image/png', 1.0); 
+        link.href = dataUrl;
         link.click();
-    }).catch(err => {
+    })
+    .catch((err) => {
         alert('이미지 저장에 실패했습니다.');
-        console.error(err);
+        console.error('캡처 에러:', err);
     });
 };
 
-// (이 아래에 기존 const groupedUnassigned = useMemo(...) 가 있어야 합니다)
 
             
             const groupedUnassigned = useMemo(() => {
