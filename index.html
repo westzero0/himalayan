@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SAT PEAK 2026 물류 관리 v33</title>
+    <title>SAT PEAK 2026 물류 관리 v34</title>
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
@@ -35,14 +35,12 @@
             const [globalBagWeight, setGlobalBagWeight] = useState(2.2);
             const [isCheckMode, setIsCheckMode] = useState(false);
             const [isShareOpen, setIsShareOpen] = useState(false);
-            
-            // 📍 장비 목록 숨김/보기 상태 추가 (기본: 숨김)
             const [showContents, setShowContents] = useState(false);
 
             useEffect(() => {
-                const savedItems = localStorage.getItem('satpeak_items_v33');
-                const savedBags = localStorage.getItem('satpeak_bags_v33');
-                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v33');
+                const savedItems = localStorage.getItem('satpeak_items_v34');
+                const savedBags = localStorage.getItem('satpeak_bags_v34');
+                const savedGlobalWeight = localStorage.getItem('satpeak_global_weight_v34');
                 if (savedGlobalWeight) setGlobalBagWeight(parseFloat(savedGlobalWeight));
                 if (savedItems && savedBags) {
                     setItems(JSON.parse(savedItems));
@@ -59,9 +57,9 @@
 
             useEffect(() => {
                 if (items.length > 0 || bags.length > 0) {
-                    localStorage.setItem('satpeak_items_v33', JSON.stringify(items));
-                    localStorage.setItem('satpeak_bags_v33', JSON.stringify(bags));
-                    localStorage.setItem('satpeak_global_weight_v33', globalBagWeight.toString());
+                    localStorage.setItem('satpeak_items_v34', JSON.stringify(items));
+                    localStorage.setItem('satpeak_bags_v34', JSON.stringify(bags));
+                    localStorage.setItem('satpeak_global_weight_v34', globalBagWeight.toString());
                 }
             }, [items, bags, globalBagWeight]);
 
@@ -179,7 +177,6 @@
                 const target = document.getElementById('export-container');
                 if (!target) return alert('캡처 영역을 찾을 수 없습니다.');
                 
-                // 이미지 캡처 시 장비 목록이 안 보이게 되어 있다면 강제로 보이게 처리
                 const originalShowContents = showContents;
                 if (!showContents) setShowContents(true);
 
@@ -194,7 +191,7 @@
                         link.download = `SAT_PEAK_카고백_현황_${dateStr}.png`;
                         link.href = dataUrl;
                         link.click();
-                        if (!originalShowContents) setShowContents(false); // 캡처 후 원래 상태로 복구
+                        if (!originalShowContents) setShowContents(false);
                     })
                     .catch((err) => {
                         alert('이미지 저장에 실패했습니다.');
@@ -211,16 +208,14 @@
                 return groups;
             }, [items, searchQuery, selectedCategory]);
 
-            // 검수 모드일 때는 무조건 내용을 보여줍니다.
             const displayContents = showContents || isCheckMode;
 
             return (
                 <>
-                    {/* 하단 기어풀 높이가 줄어든 만큼 pb 값을 줄임 (pb-[180px]) */}
                     <div className={`max-w-7xl mx-auto p-2 md:p-4 transition-all duration-500 ${isPoolOpen ? 'pb-[180px]' : 'pb-16'}`}>
                         <header className={`sticky top-0 backdrop-blur-md shadow-sm p-3 rounded-2xl mb-4 z-20 border transition-all duration-300 ${isCheckMode ? 'bg-green-50/95 border-green-300' : 'bg-white/95 border-slate-200'}`}>
                             
-                            {/* 📍 1열: 타이틀 + 가방무게 + 공유 아이콘 (한 줄 통합) */}
+                            {/* 1열: 타이틀 + 가방무게 + 공유 */}
                             <div className="flex justify-between items-center mb-3 gap-1">
                                 <h1 className="text-sm md:text-xl font-black italic text-blue-900 tracking-tighter flex-shrink-0">
                                     🏔️ SAT PEAK
@@ -251,8 +246,8 @@
                                 </div>
                             </div>
 
-                            {/* 📍 2열: 액션 버튼 4분할 그리드 (가로스크롤 방지) */}
-                            <div className={`grid gap-1.5 mb-3 ${isCheckMode ? 'grid-cols-2' : 'grid-cols-4'}`}>
+                            {/* 2열: 액션 버튼 4분할 그리드 */}
+                            <div className={`grid gap-1.5 mb-2 ${isCheckMode ? 'grid-cols-2' : 'grid-cols-4'}`}>
                                 <button 
                                     onClick={() => setIsCheckMode(!isCheckMode)} 
                                     className={`flex flex-col items-center justify-center py-1.5 rounded-lg shadow-sm transition-all border
@@ -271,27 +266,35 @@
                                 )}
                             </div>
 
-                            {/* 📍 3열: 검색창 + 리스트 보기 토글 */}
+                            {/* 📍 3열: 제외 카고백 선택 (상단에 원복됨) */}
+                            {!isCheckMode && (
+                                <div className="flex items-center gap-1.5 mb-2 overflow-x-auto no-scrollbar pb-1">
+                                    <span className="text-[10px] font-bold text-slate-400 whitespace-nowrap flex-shrink-0">⚡ 배분 제외:</span>
+                                    {bags.map(b => (
+                                        <button key={b.id} onClick={() => updateBag(b.id, 'isExcluded', !b.isExcluded)} className={`px-2 py-1 rounded-md text-[10px] font-bold whitespace-nowrap flex-shrink-0 transition-all border ${b.isExcluded ? 'bg-red-500 text-white border-red-600 shadow-inner' : 'bg-white text-slate-500 border-slate-200 hover:bg-slate-50'}`}>{b.owner || '이름 없음'}</button>
+                                    ))}
+                                </div>
+                            )}
+
+                            {/* 4열: 검색창 + 목록 보기/숨기기 */}
                             <div className="flex gap-1.5 mb-2">
                                 <input type="text" placeholder={isCheckMode ? "검수 장비 검색..." : "장비 검색..."} className={`flex-1 p-2 text-xs border rounded-lg outline-none transition-all ${isCheckMode ? 'bg-white border-green-300 focus:ring-1 focus:ring-green-400' : 'bg-slate-50 border-slate-200 focus:ring-1 focus:ring-blue-500'}`} value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
-                                
                                 <button 
                                     onClick={() => setShowContents(!showContents)} 
                                     disabled={isCheckMode}
-                                    className={`px-3 py-1.5 text-[10px] font-bold rounded-lg whitespace-nowrap shadow-sm transition-all ${isCheckMode ? 'bg-slate-200 text-slate-400' : 'bg-slate-700 text-white active:scale-95'}`}
+                                    className={`px-3 py-1.5 text-[10px] font-bold rounded-lg whitespace-nowrap shadow-sm transition-all flex items-center justify-center min-w-[70px] ${isCheckMode ? 'bg-slate-200 text-slate-400' : 'bg-slate-700 text-white active:scale-95'}`}
                                 >
-                                    {displayContents ? '👀 목록 숨김' : '👀 목록 보기'}
+                                    {displayContents ? '👀 숨김' : '👀 목록'}
                                 </button>
                             </div>
 
-                            {/* 📍 4열: 카테고리 필터 */}
+                            {/* 5열: 카테고리 필터 */}
                             <div className="flex gap-1.5 overflow-x-auto no-scrollbar">
                                 {['전체', '등반구', '막영구', '취사구', '통신', '연료', '식량'].map(c => <button key={c} onClick={() => setSelectedCategory(c)} className={`px-3 py-1 rounded-md text-[10px] font-bold whitespace-nowrap transition-all ${selectedCategory === c ? (isCheckMode ? 'bg-green-600 text-white' : 'bg-blue-600 text-white') : 'bg-white text-slate-500 border border-slate-200'}`}>{c}</button>)}
                             </div>
                         </header>
 
-                        {/* 카고백 렌더링 영역 */}
-                        <div id="export-container" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 bg-slate-100 rounded-2xl">
+                        <div id="export-container" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3 bg-slate-100 rounded-2xl pt-2 px-2 -mx-2 pb-6 -mt-2">
                             <div className="hidden print:flex mb-2 px-2 justify-between items-end col-span-full">
                                 <h2 className="text-lg font-black text-slate-800">🏔️ SAT PEAK 2026 패킹 현황</h2>
                                 <span className="text-[10px] font-bold text-slate-400">{new Date().toLocaleDateString()}</span>
@@ -333,10 +336,6 @@
                                                         <span className="text-[8px] font-bold text-blue-400 mr-1">개인</span>
                                                         <input type="number" step="0.1" value={bag.personalWeight} onChange={e => updateBag(bag.id, 'personalWeight', e.target.value)} className="w-6 bg-transparent text-[9px] font-black border-none p-0 text-center text-blue-700 outline-none" />
                                                     </div>
-                                                    {/* 제외 토글 (카드 내부에 미니 배치) */}
-                                                    {!isCheckMode && (
-                                                        <button onClick={() => updateBag(bag.id, 'isExcluded', !b.isExcluded)} className={`ml-1 px-1.5 py-0.5 rounded text-[8px] font-bold border ${bag.isExcluded ? 'bg-red-500 text-white border-red-600' : 'bg-slate-100 text-slate-400 border-slate-200'}`}>{bag.isExcluded ? '제외됨' : '포함'}</button>
-                                                    )}
                                                 </div>
                                             </div>
                                             {!isCheckMode && <button onClick={() => removeBag(bag.id)} className="text-slate-300 hover:text-red-500 text-xs px-1">✕</button>}
@@ -359,7 +358,7 @@
                                             </div>
                                         )}
 
-                                        {/* 📍 내용물 보기/숨기기 처리 영역 */}
+                                        {/* 📍 목록 보기/숨기기에 따라 렌더링 */}
                                         {displayContents && (
                                             <div className="flex flex-wrap gap-1 min-h-[20px] content-start pt-2 border-t border-slate-100 mt-2">
                                                 {Object.entries(groupedBagItems).map(([name, g]) => {
@@ -407,7 +406,6 @@
                         </div>
                     </div>
 
-                    {/* 📍 기어 풀 높이 대폭 축소 (h-180px) */}
                     <footer className={`fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md shadow-[0_-10px_30px_rgba(0,0,0,0.08)] border-t transition-all duration-300 z-30 ${isPoolOpen ? 'h-[180px]' : 'h-10'} print:hidden`}>
                         <div className="max-w-7xl mx-auto px-3 h-full flex flex-col">
                             <div className="flex justify-between items-center h-10 cursor-pointer" onClick={() => setIsPoolOpen(!isPoolOpen)}>
